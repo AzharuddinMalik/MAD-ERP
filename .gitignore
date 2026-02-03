@@ -1,0 +1,66 @@
+# ==========================================
+# ROOT .gitignore for MAD-ERP Project
+# ==========================================
+
+# ===== Environment Variables =====
+.env
+.env.local
+.env.production
+*.env
+
+# ===== IDE & Editor Files =====
+.vscode/
+.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===== Docker =====
+# Keep docker-compose.yml but ignore local overrides
+docker-compose.override.yml
+
+# ===== Database =====
+*.sql.backup
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== Temporary Files =====
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+
+# ===== OS Files =====
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# ===== Sensitive Data =====
+secrets/
+credentials/
+*.pem
+*.key
+*.cert
+*.crt
+
+# ===== Build Artifacts (will be ignored in subdirs too) =====
+target/
+build/
+dist/
+node_modules/
