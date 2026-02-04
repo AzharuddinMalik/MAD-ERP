@@ -6,7 +6,7 @@ services:
     container_name: mad-mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_ROOT_PASSWORD: ci9STOvqPRJYGns6EBMAbKu8pLzCW0Na
       MYSQL_DATABASE: madcms
     ports:
       - "3307:3306" # Host:Container (Avoid conflict with local 3306)
@@ -29,7 +29,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/madcms?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: rootpassword
+      SPRING_DATASOURCE_PASSWORD: ci9STOvqPRJYGns6EBMAbKu8pLzCW0Na
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
     depends_on:
       mysql-db:
