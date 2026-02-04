@@ -21,7 +21,7 @@ services:
       - mad-network
 
   mad-backend:
-    build: ./journalApp
+    build: ./mad-backend
     container_name: mad-backend
     restart: always
     ports:
@@ -31,6 +31,7 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ci9STOvqPRJYGns6EBMAbKu8pLzCW0Na
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: 5367566B59703373367639792F423F4528482B4D6251655468576D5A71347437
     depends_on:
       mysql-db:
         condition: service_healthy

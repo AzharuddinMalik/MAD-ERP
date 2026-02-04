@@ -1,0 +1,12 @@
+# Railway Configuration for MAD-ERP
+
+# This file tells Railway how to build and deploy the multi-service application
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "mad-backend/Dockerfile"
+
+[deploy]
+startCommand = "docker-compose up"
+healthcheckPath = "/api/auth/login"
+healthcheckTimeout = 300
