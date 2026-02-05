@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL Database (Free Tier)
+  - type: pserv
+    name: mad-erp-db
+    env: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile.postgres
+    envVars:
+      - key: POSTGRES_USER
+        value: maduser
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+      - key: POSTGRES_DB
+        value: madcms
+
+  # Backend API (Free Tier)
+  - type: web
+    name: mad-backend-api
+    env: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./mad-backend/Dockerfile
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: mad-erp-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        value: maduser
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: mad-erp-db
+          property: password
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: update
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SERVER_PORT
+        value: 8080
+    healthCheckPath: /api/health
+
+  # Frontend (Free Tier - Static Site)
+  - type: web
+    name: mad-frontend-app
+    env: static
+    region: singapore
+    plan: free
+    buildCommand: cd mad-frontend && npm install && npm run build
+    staticPublishPath: ./mad-frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: mad-backend-api
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://mad-backend-api.onrender.com/api/*

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { dashboardService } from '../services/dashboardService';
+import { getApiUrl } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard,
@@ -461,10 +462,10 @@ const Dashboard = () => {
                                                             <div
                                                                 key={i}
                                                                 className="w-40 h-40 rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:border-brand-300 transition-colors shadow-sm relative group/img"
-                                                                onClick={() => window.open(`http://localhost:8080/uploads/${url}`, '_blank')}
+                                                                onClick={() => window.open(getApiUrl(`/uploads/${url}`), '_blank')}
                                                                 title="Click to view full size"
                                                             >
-                                                                <img src={`http://localhost:8080/uploads/${url}`} alt="Site" className="w-full h-full object-cover" />
+                                                                <img src={getApiUrl(`/uploads/${url}`)} alt="Site" className="w-full h-full object-cover" />
                                                                 <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
                                                                     <ArrowRight className="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transform -rotate-45" />
                                                                 </div>

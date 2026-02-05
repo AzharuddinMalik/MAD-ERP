@@ -10,9 +10,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // Get allowed origins from environment variable or use localhost as default
+        String allowedOrigins = System.getenv().getOrDefault(
+                "ALLOWED_ORIGINS",
+                "http://localhost:5173,http://localhost:5175");
+
         registry.addMapping("/**") // Apply to ALL endpoints
-                .allowedOrigins("http://localhost:5173", "http://localhost:5175") // Allow React Frontend (both ports
-                                                                                  // commonly used)
+                .allowedOrigins(allowedOrigins.split(",")) // Split comma-separated origins
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS") // Allow these verbs
                 .allowedHeaders("*")
                 .allowCredentials(true);
