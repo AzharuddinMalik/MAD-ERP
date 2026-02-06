@@ -1,3 +1,4 @@
+import axios from 'axios';
 import API_URL from '../services/api';
 
 // Create an instance of axios with the base URL of your Spring Boot Backend
