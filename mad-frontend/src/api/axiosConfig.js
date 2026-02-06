@@ -1,9 +1,9 @@
-import axios from 'axios';
+import API_URL from '../services/api';
 
 // Create an instance of axios with the base URL of your Spring Boot Backend
 const api = axios.create({
     // Change this if your backend runs on a different port or context path
-    baseURL: '/api',
+    baseURL: `${API_URL}/api`,
     headers: {
         'Content-Type': 'application/json',
     }
