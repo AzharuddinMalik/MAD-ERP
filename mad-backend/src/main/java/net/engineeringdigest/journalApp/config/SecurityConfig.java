@@ -36,6 +36,7 @@ public class SecurityConfig {
 
                         // ✅ Allow Public Client API (Crucial for Client View)
                         .requestMatchers("/api/public/**").permitAll()
+                        .requestMatchers("/health").permitAll() // ✅ Allow Health Check
 
                         // ✅ Allow Static Resources (Uploads)
                         .requestMatchers("/uploads/**").permitAll()
@@ -58,7 +59,8 @@ public class SecurityConfig {
                 "http://localhost:5174", // Dev
                 "http://localhost:5175", // Dev
                 "http://localhost", // Docker Production (Port 80)
-                "http://127.0.0.1" // Docker Production IP
+                "http://127.0.0.1", // Docker Production IP
+                "https://mad-frontend-app.onrender.com" // ✅ Render Production Frontend
         ));
 
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
