@@ -275,7 +275,7 @@ const Dashboard = () => {
                                 <h3 className="font-bold text-slate-800 text-lg">Weekly Labour Trend</h3>
                                 <button className="p-1 hover:bg-slate-50 rounded"><MoreVertical className="w-4 h-4 text-slate-400" /></button>
                             </div>
-                            <div className="h-56">
+                            <div className="h-56 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={labourTrendData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -296,7 +296,7 @@ const Dashboard = () => {
                                 <h3 className="font-bold text-slate-800 text-lg">Project Status</h3>
                                 <button className="p-1 hover:bg-slate-50 rounded"><MoreVertical className="w-4 h-4 text-slate-400" /></button>
                             </div>
-                            <div className="h-56">
+                            <div className="h-56 w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
