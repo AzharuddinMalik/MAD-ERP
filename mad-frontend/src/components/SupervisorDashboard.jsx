@@ -121,7 +121,7 @@ const SupervisorDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
                                     <button
                                         onClick={() => handleOpenUpdate(project)}
                                         className="bg-slate-100 text-slate-700 py-3 rounded-lg font-semibold hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center gap-2 text-sm"

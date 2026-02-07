@@ -235,22 +235,22 @@ const LabourManagement = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex gap-2 p-1 bg-slate-50 rounded-lg border border-slate-100 w-fit">
+                                            <div className="flex flex-wrap gap-2 p-1 bg-slate-50 rounded-lg border border-slate-100 w-full sm:w-fit">
                                                 <button
                                                     onClick={() => toggleStatus(worker.id, 'PRESENT')}
-                                                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${attendanceState[worker.id] === 'PRESENT' ? 'bg-white text-green-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'PRESENT' ? 'bg-white text-green-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
                                                 >
                                                     <CheckCircle2 className="w-4 h-4" /> Present
                                                 </button>
                                                 <button
                                                     onClick={() => toggleStatus(worker.id, 'HALF_DAY')}
-                                                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${attendanceState[worker.id] === 'HALF_DAY' ? 'bg-white text-amber-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'HALF_DAY' ? 'bg-white text-amber-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
                                                 >
                                                     <Clock className="w-4 h-4" /> Half Day
                                                 </button>
                                                 <button
                                                     onClick={() => toggleStatus(worker.id, 'ABSENT')}
-                                                    className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${attendanceState[worker.id] === 'ABSENT' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
+                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'ABSENT' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
                                                 >
                                                     <UserX className="w-4 h-4" /> Absent
                                                 </button>
