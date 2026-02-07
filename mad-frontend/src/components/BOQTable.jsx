@@ -129,8 +129,8 @@ const BOQTable = ({ boqItems, projectId, onRefresh, isClientView, loading: initi
                 )}
             </div>
 
-            {/* Table Area */}
-            <div className="overflow-x-auto custom-scrollbar flex-1">
+            {/* Table Area (Desktop) */}
+            <div className="hidden md:block overflow-x-auto custom-scrollbar flex-1">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                         <tr>
@@ -144,7 +144,7 @@ const BOQTable = ({ boqItems, projectId, onRefresh, isClientView, loading: initi
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {/* Add Row Form */}
+                        {/* Add Row Form (Desktop) - Kept inside table for alignment */}
                         {isAdding && (
                             <tr className="bg-brand-50/30 animate-in fade-in slide-in-from-top-2">
                                 <td className="px-6 py-3">
@@ -261,23 +261,111 @@ const BOQTable = ({ boqItems, projectId, onRefresh, isClientView, loading: initi
                                 )}
                             </React.Fragment>
                         ))}
-
-                        {boqItems.length === 0 && !isAdding && (
-                            <tr>
-                                <td colSpan="7" className="px-6 py-12 text-center">
-                                    <div className="flex flex-col items-center justify-center text-slate-400">
-                                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-200 border-dashed">
-                                            <Search className="w-6 h-6 opacity-30" />
-                                        </div>
-                                        <p className="text-sm font-medium">No items found</p>
-                                        <p className="text-xs mt-1">Add items to start tracking quantities.</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        )}
                     </tbody>
                 </table>
             </div>
+
+            {/* Mobile Card View (New) */}
+            <div className="md:hidden flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                {/* Mobile Add Form */}
+                {isAdding && (
+                    <div className="bg-white p-4 rounded-xl border border-brand-200 shadow-lg animate-in fade-in slide-in-from-top-2">
+                        <h4 className="font-bold text-slate-800 mb-3">Add New Item</h4>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold">Description</label>
+                                <input
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg outline-none text-sm"
+                                    placeholder="Enter work description..."
+                                    value={addForm.itemName}
+                                    onChange={e => setAddForm({ ...addForm, itemName: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold">Unit</label>
+                                    <select
+                                        className="w-full px-2 py-2 border border-slate-200 rounded-lg outline-none text-sm bg-white"
+                                        value={addForm.unit}
+                                        onChange={e => setAddForm({ ...addForm, unit: e.target.value })}
+                                    >
+                                        {['SFT', 'RFT', 'LUMP', 'CUM', 'NOS'].map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 font-bold">Rate (₹)</label>
+                                    <input type="number" className="w-full px-2 py-2 border border-slate-200 rounded-lg outline-none text-sm" placeholder="0.00" value={addForm.rate} onChange={e => setAddForm({ ...addForm, rate: e.target.value })} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 font-bold">Total Scope</label>
+                                <input type="number" className="w-full px-2 py-2 border border-slate-200 rounded-lg outline-none text-sm" placeholder="0" value={addForm.totalScope} onChange={e => setAddForm({ ...addForm, totalScope: e.target.value })} />
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                                <button onClick={() => setIsAdding(false)} className="flex-1 py-2 text-slate-600 bg-slate-100 rounded-lg font-medium text-sm">Cancel</button>
+                                <button onClick={handleAddSubmit} disabled={loading} className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm">Add Item</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {filteredItems.map(item => (
+                    <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 className="font-bold text-slate-900 text-sm leading-tight">{item.itemName}</h3>
+                                <span className="inline-block mt-1 bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded border border-slate-200">{item.unit}</span>
+                            </div>
+                            <div className="text-right">
+                                <p className="font-bold text-slate-900 text-sm">₹{(item.rate * item.totalScope).toLocaleString()}</p>
+                                <p className="text-xs text-slate-400">₹{item.rate}/{item.unit}</p>
+                            </div>
+                        </div>
+
+                        <div className="mb-3">
+                            <div className="flex justify-between items-center text-xs text-slate-500 mb-1">
+                                <span>Progress</span>
+                                <span className="font-medium">{Math.round((item.completedScope / item.totalScope) * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-100">
+                                <div
+                                    className={`h-full rounded-full ${item.completedScope >= item.totalScope ? 'bg-emerald-500' : 'bg-brand-500'}`}
+                                    style={{ width: `${Math.min((item.completedScope / item.totalScope) * 100, 100)}%` }}
+                                ></div>
+                            </div>
+                            <div className="flex justify-between items-center text-xs text-slate-500 mt-1">
+                                <span>{item.completedScope} completed</span>
+                                <span>Target: {item.totalScope}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 border-t border-slate-100 pt-3">
+                            <button
+                                onClick={() => setMeasuringItem(item)}
+                                className="flex-1 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-semibold flex justify-center items-center gap-2 hover:bg-indigo-100"
+                            >
+                                <Ruler className="w-4 h-4" /> Measure
+                            </button>
+                            {isAdmin && (
+                                <>
+                                    <button onClick={() => handleEditClick(item)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
+                                    <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {boqItems.length === 0 && !isAdding && (
+                <div className="p-12 text-center text-slate-400">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-200 border-dashed">
+                        <Search className="w-6 h-6 opacity-30" />
+                    </div>
+                    <p className="text-sm font-medium">No items found</p>
+                    <p className="text-xs mt-1">Add items to start tracking quantities.</p>
+                </div>
+            )}
 
             {/* Measurement Modal */}
             {measuringItem && (

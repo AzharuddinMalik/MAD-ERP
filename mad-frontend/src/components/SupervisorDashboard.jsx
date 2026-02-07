@@ -43,8 +43,11 @@ const SupervisorDashboard = () => {
         setPhoto2(null);
     };
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const submitUpdate = async () => {
-        if (!labourCount || !selectedProject) return;
+        if (!labourCount || !selectedProject || isSubmitting) return;
+        setIsSubmitting(true);
         try {
             const formData = new FormData();
             formData.append('projectId', selectedProject.id);
@@ -67,6 +70,8 @@ const SupervisorDashboard = () => {
             alert("Update Submitted Successfully!");
         } catch (err) {
             alert("Failed to submit update.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -213,8 +218,18 @@ const SupervisorDashboard = () => {
 
                             <div className="flex gap-3 pt-2">
                                 <button onClick={() => setOpenModal(false)} className="flex-1 py-2 text-slate-600 bg-slate-100 rounded-lg font-medium">Cancel</button>
-                                <button onClick={submitUpdate} className="flex-1 py-2 bg-brand-600 text-white rounded-lg font-medium flex items-center justify-center gap-2">
-                                    <Send className="w-4 h-4" /> Submit
+                                <button
+                                    onClick={submitUpdate}
+                                    disabled={isSubmitting}
+                                    className={`flex-1 py-2 bg-brand-600 text-white rounded-lg font-medium flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-700'}`}
+                                >
+                                    {isSubmitting ? (
+                                        <>Processing...</>
+                                    ) : (
+                                        <>
+                                            <Send className="w-4 h-4" /> Submit
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

@@ -20,6 +20,7 @@ const LabourManagement = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [duplicateWarnings, setDuplicateWarnings] = useState([]); // Store duplicate warnings
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Add/Edit Form State
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -66,6 +67,8 @@ const LabourManagement = () => {
     // 2. Handle Add / Update
     const handleFormSubmit = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             if (editingId) {
                 // UPDATE via Service
@@ -84,6 +87,8 @@ const LabourManagement = () => {
         } catch (err) {
             alert("Operation failed. Check console.");
             console.error(err);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -108,6 +113,8 @@ const LabourManagement = () => {
 
     // 4. Submit Attendance
     const submitAttendance = async () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         const payload = workers.map(w => ({
             labourId: w.id,
             projectId,
@@ -123,6 +130,8 @@ const LabourManagement = () => {
             console.error(err);
             const errorMessage = err.response?.data || err.message || "Server Error";
             alert("❌ Failed to save attendance: " + errorMessage);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -260,8 +269,17 @@ const LabourManagement = () => {
                                 </div>
                                 {workers.length > 0 && (
                                     <div className="pt-4 border-t border-slate-100 sticky bottom-0 bg-white p-4 -mx-6 -mb-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                                        <button onClick={submitAttendance} className="w-full py-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-brand-200 hover:shadow-xl hover:scale-[1.01] transition-all flex justify-center items-center gap-2">
-                                            <Save className="w-5 h-5" /> Save Daily Attendance
+                                        <button
+                                            onClick={submitAttendance}
+                                            disabled={isSubmitting}
+                                            className={`w-full py-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-brand-200 transition-all flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:scale-[1.01]'}`}
+                                        >
+                                            {isSubmitting ? (
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                            ) : (
+                                                <Save className="w-5 h-5" />
+                                            )}
+                                            {isSubmitting ? 'Saving...' : 'Save Daily Attendance'}
                                         </button>
                                     </div>
                                 )}
@@ -348,7 +366,12 @@ const LabourManagement = () => {
                                         </div>
                                         <div className="flex gap-3 pt-4 border-t border-slate-200">
                                             <button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                                            <button type="submit" className="flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg shadow-brand-200 transition-colors">
+                                            <button
+                                                type="submit"
+                                                disabled={isSubmitting}
+                                                className={`flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold shadow-lg shadow-brand-200 transition-colors flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-700'}`}
+                                            >
+                                                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                                                 {editingId ? 'Update Worker Details' : 'Add to Team'}
                                             </button>
                                         </div>

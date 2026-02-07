@@ -89,14 +89,14 @@ const ActiveProjects = () => {
             <div className="max-w-7xl mx-auto">
 
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
+                <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4">
                     <div>
                         <button onClick={() => navigate('/dashboard')} className="flex items-center text-slate-500 hover:text-slate-800 mb-2 font-medium">
                             <ArrowLeft className="w-4 h-4 mr-1" /> Back
                         </button>
                         <h1 className="text-3xl font-extrabold tracking-tight">Live Operations</h1>
                     </div>
-                    <button onClick={() => navigate('/create-project')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all">
+                    <button onClick={() => navigate('/create-project')} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all">
                         <Plus className="w-4 h-4" /> New Project
                     </button>
                 </div>
