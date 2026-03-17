@@ -4,6 +4,7 @@ import net.engineeringdigest.journalApp.dto.auth.ProjectDTO;
 import net.engineeringdigest.journalApp.model.Project;
 import net.engineeringdigest.journalApp.model.SiteUpdate;
 import net.engineeringdigest.journalApp.model.User;
+import net.engineeringdigest.journalApp.model.LeadInquiry;
 import net.engineeringdigest.journalApp.repository.AttendanceRepository;
 import net.engineeringdigest.journalApp.repository.BillOfQuantityRepository;
 import net.engineeringdigest.journalApp.repository.CityRepository;
@@ -11,6 +12,7 @@ import net.engineeringdigest.journalApp.repository.LabourRepository;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
 import net.engineeringdigest.journalApp.repository.SiteUpdateRepository;
 import net.engineeringdigest.journalApp.repository.UserRepository; // ✅ ADDED IMPORT
+import net.engineeringdigest.journalApp.repository.LeadInquiryRepository;
 import net.engineeringdigest.journalApp.service.ProjectService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +60,9 @@ public class AdminController {
 
     @Autowired
     private AttendanceRepository attendanceRepository;
+
+    @Autowired
+    private LeadInquiryRepository leadInquiryRepository;
     private final ProjectRepository projectRepository;
     private final SiteUpdateRepository siteUpdateRepository;
 
@@ -346,4 +351,56 @@ public class AdminController {
             return ResponseEntity.badRequest().body("Error updating project: " + e.getMessage());
         }
     }
-}
+
+    // ── LEADS MANAGEMENT ENPOINTS ──
+
+    // Get all leads ordered by newest first
+    @GetMapping("/leads")
+    public ResponseEntity<?> getAllLeads() {
+        return ResponseEntity.ok(leadInquiryRepository.findAllByOrderBySubmittedAtDesc());
+    }
+
+    // Update lead status (e.g. NEW -> CONTACTED -> CLOSED)
+    @PutMapping("/leads/{id}/status")
+    public ResponseEntity<?> updateLeadStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        try {
+            LeadInquiry lead = leadInquiryRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Lead not found"));
+
+            String newStatus = body.get("status");
+            if (newStatus != null) {
+                lead.setStatus(newStatus.toUpperCase());
+                leadInquiryRepository.save(lead);
+            }
+            return ResponseEntity.ok(lead);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error updating lead: " + e.getMessage());
+        }
+    }
+
+    // Get leads summary stats for the dashboard widget
+    @GetMapping("/leads/stats")
+    public ResponseEntity<?> getLeadsStats() {
+        try {
+            LocalDateTime startOfDay = LocalDateTime.now().toLocalDate().atStartOfDay();
+            LocalDateTime endOfDay = startOfDay.plusDays(1);
+
+            long todayCount = leadInquiryRepository.countBySubmittedAtBetween(startOfDay, endOfDay);
+            long totalNew = leadInquiryRepository.countByStatus("NEW");
+            long totalContacted = leadInquiryRepository.countByStatus("CONTACTED");
+            long totalClosed = leadInquiryRepository.countByStatus("CLOSED");
+            long totalAll = leadInquiryRepository.count();
+
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("todayCount", todayCount);
+            stats.put("totalNew", totalNew);
+            stats.put("totalContacted", totalContacted);
+            stats.put("totalClosed", totalClosed);
+            stats.put("totalAll", totalAll);
+
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error fetching lead stats: " + e.getMessage());
+        }
+    }
+}

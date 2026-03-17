@@ -1,9 +1,12 @@
 package net.engineeringdigest.journalApp.controller.api;
 
 import net.engineeringdigest.journalApp.model.BillOfQuantity;
+import net.engineeringdigest.journalApp.model.LeadInquiry;
 import net.engineeringdigest.journalApp.model.Project;
 import net.engineeringdigest.journalApp.repository.BillOfQuantityRepository;
+import net.engineeringdigest.journalApp.repository.LeadInquiryRepository;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
+import net.engineeringdigest.journalApp.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +24,12 @@ public class PublicController {
 
     @Autowired
     private BillOfQuantityRepository boqRepository;
+
+    @Autowired
+    private LeadInquiryRepository leadInquiryRepository;
+
+    @Autowired
+    private NotificationService notificationService;
 
     // Endpoint for Client View (No Auth Required)
     // Matches ClientView.jsx: api.get(`/public/project/${projectId}`)
@@ -45,6 +54,28 @@ public class PublicController {
             response.put("project", projectData);
             response.put("boq", boqList);
 
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        }
+    }
+
+    // Endpoint to Submit Leads (Hero form / Contact form)
+    @PostMapping("/leads")
+    public ResponseEntity<?> submitLead(@RequestBody LeadInquiry lead) {
+        try {
+            if (lead.getName() == null || lead.getPhone() == null) {
+                return ResponseEntity.badRequest().body("Name and phone are required");
+            }
+            leadInquiryRepository.save(lead);
+
+            // 📩 Send email notification to Admin asynchronously
+            new Thread(() -> {
+                notificationService.sendNewLeadNotification(lead);
+            }).start();
+
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Lead submitted successfully");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error: " + e.getMessage());
