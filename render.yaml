@@ -3,7 +3,8 @@ services:
     name: mad-backend
     env: java
     region: oregon
-    buildCommand: chmod +x mvnw && ./mvnw.cmd clean package -DskipTests
+    rootDir: mad-backend
+    buildCommand: chmod +x mvnw && ./mvnw clean package -DskipTests
     startCommand: java -jar target/journalApp-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
     envVars:
       - key: DATABASE_URL
@@ -20,8 +21,6 @@ services:
           property: password
       - key: JWT_SECRET
         generateValue: true
-      - key: ADMIN_PASSWORD
-        sync: false
       - key: MAIL_USERNAME
         sync: false
       - key: MAIL_PASSWORD
@@ -33,6 +32,7 @@ services:
     name: mad-frontend
     env: static
     region: oregon
+    rootDir: mad-frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     envVars:
