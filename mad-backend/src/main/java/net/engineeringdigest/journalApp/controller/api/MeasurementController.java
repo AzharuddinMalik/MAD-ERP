@@ -6,6 +6,10 @@ import net.engineeringdigest.journalApp.model.Project;
 import net.engineeringdigest.journalApp.repository.BillOfQuantityRepository;
 import net.engineeringdigest.journalApp.repository.DailyMeasurementRepository;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
+import net.engineeringdigest.journalApp.repository.SiteUpdateRepository;
+import net.engineeringdigest.journalApp.service.LiveUpdateService;
+import net.engineeringdigest.journalApp.service.ProjectService;
+import net.engineeringdigest.journalApp.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/measurements")
+@RequestMapping("/api/v1/measurements")
 public class MeasurementController {
 
     @Autowired
@@ -27,6 +31,15 @@ public class MeasurementController {
 
     @Autowired
     private ProjectRepository projectRepository;
+
+    @Autowired
+    private net.engineeringdigest.journalApp.repository.SiteUpdateRepository siteUpdateRepository;
+
+    @Autowired
+    private LiveUpdateService notificationService;
+
+    @Autowired
+    private ProjectService projectService;
 
     // 1. Get Project BOQ (The "Plan")
     // Frontend calls: GET /api/measurements/project/{projectId}
@@ -43,7 +56,6 @@ public class MeasurementController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @PostMapping("/record")
     public ResponseEntity<?> recordMeasurement(@RequestBody Map<String, Object> payload) {
-        try {
             Long boqId = Long.parseLong(payload.get("boqId").toString());
             double length = Double.parseDouble(payload.get("length").toString());
             double width = payload.containsKey("width") ? Double.parseDouble(payload.get("width").toString()) : 0;
@@ -51,7 +63,7 @@ public class MeasurementController {
             String supervisorName = (String) payload.get("supervisorName");
 
             BillOfQuantity boq = boqRepository.findById(boqId)
-                    .orElseThrow(() -> new RuntimeException("BOQ Item not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("BOQ Item", boqId));
 
             // Calculate Area
             double quantity = 0;
@@ -81,21 +93,28 @@ public class MeasurementController {
             boq.setCompletedScope(boq.getCompletedScope() + quantity);
             boqRepository.save(boq);
 
-            return ResponseEntity.ok("Measurement recorded: " + quantity + " " + boq.getUnit());
+            // 📢 NEW: Integrate with Site Updates & Real-time Live Feed
+            net.engineeringdigest.journalApp.model.SiteUpdate update = new net.engineeringdigest.journalApp.model.SiteUpdate();
+            update.setProject(boq.getProject());
+            String text = String.format("Measurement recorded: %.2f %s for '%s' by %s. %s", 
+                quantity, boq.getUnit(), boq.getItemName(), supervisorName, (remarks != null ? remarks : ""));
+            update.setContent(text);
+            update.setUpdateTime(java.time.LocalDateTime.now());
+            net.engineeringdigest.journalApp.model.SiteUpdate savedUpdate = siteUpdateRepository.save(update);
 
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
+            // 📡 Broadcast to Dashboard
+            notificationService.broadcastSiteUpdate(projectService.mapToSiteUpdateDTO(savedUpdate));
+
+            return ResponseEntity.ok("Measurement recorded: " + quantity + " " + boq.getUnit());
     }
 
     // 3. Add BOQ Item
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/boq")
     public ResponseEntity<?> addBOQItem(@RequestBody Map<String, Object> payload) {
-        try {
             Long projectId = Long.parseLong(payload.get("projectId").toString());
             Project project = projectRepository.findById(projectId)
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
 
             BillOfQuantity boq = new BillOfQuantity();
             boq.setProject(project);
@@ -107,18 +126,14 @@ public class MeasurementController {
 
             boqRepository.save(boq);
             return ResponseEntity.ok(boq);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
     }
 
     // 4. Update BOQ Item (PUT)
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/boq/{id}")
     public ResponseEntity<?> updateBOQItem(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
-        try {
             BillOfQuantity boq = boqRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("BOQ Item not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("BOQ Item", id));
 
             if (payload.containsKey("itemName"))
                 boq.setItemName((String) payload.get("itemName"));
@@ -131,23 +146,21 @@ public class MeasurementController {
 
             boqRepository.save(boq);
             return ResponseEntity.ok(boq);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
     }
 
     // 5. Delete BOQ Item
     @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/boq/{id}")
     public ResponseEntity<?> deleteBOQItem(@PathVariable Long id) {
-        try {
             if (!boqRepository.existsById(id)) {
-                return ResponseEntity.badRequest().body("Error: BOQ Item not found");
+                throw new ResourceNotFoundException("BOQ Item", id);
             }
             boqRepository.deleteById(id);
             return ResponseEntity.ok("BOQ Item deleted successfully");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
+    }
+    // 6. Get BOQ Item History
+    @GetMapping("/boq/{boqId}/history")
+    public ResponseEntity<List<DailyMeasurement>> getBOQHistory(@PathVariable Long boqId) {
+        return ResponseEntity.ok(measurementRepository.findByBoqItemIdOrderByDateDesc(boqId));
     }
 }

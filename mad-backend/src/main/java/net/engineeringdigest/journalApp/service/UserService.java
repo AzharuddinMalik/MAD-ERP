@@ -59,6 +59,10 @@ public class UserService {
             existingUser.setIsActive(updatedUser.getIsActive());
         }
 
+        if (updatedUser.getPasswordHash() != null && !updatedUser.getPasswordHash().isEmpty()) {
+            existingUser.setPasswordHash(passwordEncoder.encode(updatedUser.getPasswordHash()));
+        }
+
         return userRepository.save(existingUser);
     }
 

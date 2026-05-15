@@ -1,5 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Building2, MapPin, User, Calendar, HardHat, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, memo } from 'react';
+import { X, Save, Building2, MapPin, User, Calendar, HardHat, RefreshCw, ChevronRight } from 'lucide-react';
+import Button from './ui/Button';
+import Modal, { ModalPrimaryButton, ModalCancelButton } from './ui/Modal';
+
+/**
+ * 🔒 Reusable Input Field - Industrial Elegance Edition
+ */
+const InputField = memo(({ label, icon: Icon, ...props }) => (
+    <div className="space-y-2">
+        <label className="block text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em] ml-1">
+            {label}
+        </label>
+        <div className="relative group">
+            {Icon && <Icon className="absolute left-4 top-3.5 w-4 h-4 text-admin-text-muted group-focus-within:text-admin-accent transition-colors" />}
+            <input
+                {...props}
+                className={`w-full ${Icon ? 'pl-11' : 'pl-4'} pr-4 py-3.5 rounded-xl border border-admin-border bg-admin-bg-secondary text-admin-text placeholder:text-admin-text-muted/40 focus:border-admin-accent/50 focus:ring-4 focus:ring-admin-accent/5 outline-none transition-all text-sm font-admin font-medium shadow-inner`}
+            />
+        </div>
+    </div>
+));
+
+InputField.displayName = 'InputField';
 
 const EditProjectModal = ({ project, cities, supervisors, onClose, onUpdate, isUpdating }) => {
     const [formData, setFormData] = useState({
@@ -13,15 +35,13 @@ const EditProjectModal = ({ project, cities, supervisors, onClose, onUpdate, isU
     });
 
     useEffect(() => {
-        alert("Debug: Modal Mounted for " + (project.name || project.projectName)); // 🟢 DEBUG: Verify Mount
-        console.log("EditProjectModal Mounted", project);
         if (project) {
             setFormData({
                 name: project.name || project.projectName || '',
                 clientName: project.clientName || '',
                 location: project.location || '',
-                cityId: project.city ? project.city.id : '',
-                supervisorId: project.supervisor ? project.supervisor.id : '',
+                cityId: project.city ? String(project.city.id) : '',
+                supervisorId: project.supervisor ? String(project.supervisor.id) : '',
                 startDate: project.startDate || '',
                 status: project.status || 'RUNNING'
             });
@@ -35,7 +55,6 @@ const EditProjectModal = ({ project, cities, supervisors, onClose, onUpdate, isU
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Prepare payload
         const payload = {
             name: formData.name,
             clientName: formData.clientName,
@@ -46,100 +65,99 @@ const EditProjectModal = ({ project, cities, supervisors, onClose, onUpdate, isU
             status: formData.status
         };
         onUpdate({ id: project.id, data: payload });
-        onClose();
     };
 
     if (!project) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50 sticky top-0 backdrop-blur-md">
-                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <Building2 className="w-5 h-5 text-indigo-600" />
-                        Edit Project: <span className="text-indigo-600">{project.projectName || project.name}</span>
-                    </h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-all">
-                        <X className="w-5 h-5" />
-                    </button>
+        <Modal
+            isOpen={!!project}
+            onClose={onClose}
+            title="Modify Project"
+            icon={<Building2 className="w-6 h-6 text-admin-accent" />}
+            footer={
+                <div className="flex justify-between items-center w-full">
+                    <ModalCancelButton onClick={onClose}>
+                        Abandon Changes
+                    </ModalCancelButton>
+                    <ModalPrimaryButton
+                        type="submit"
+                        form="edit-project-form"
+                        loading={isUpdating}
+                        icon={Save}
+                        className="min-w-[180px]"
+                    >
+                        {isUpdating ? 'Synchronizing...' : 'Commit Updates'}
+                    </ModalPrimaryButton>
+                </div>
+            }
+        >
+            <form id="edit-project-form" onSubmit={handleSubmit} className="space-y-8 pb-4">
+                {/* Status Select - Industrial Toggle */}
+                <div className="space-y-3">
+                    <label className="block text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em] ml-1">
+                        Operational Status
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1.5 bg-admin-bg-tertiary rounded-xl border border-admin-border shadow-inner">
+                        {['RUNNING', 'ON_HOLD', 'DELAYED', 'COMPLETED'].map(status => (
+                            <label key={status} className={`
+                                cursor-pointer rounded-lg py-2.5 text-center transition-all border
+                                ${formData.status === status
+                                    ? 'bg-admin-accent text-white border-admin-accent font-black shadow-lg shadow-admin-accent/20'
+                                    : 'bg-transparent border-transparent text-admin-text-muted hover:text-admin-text font-bold'}
+                            `}>
+                                <input
+                                    type="radio"
+                                    name="status"
+                                    value={status}
+                                    checked={formData.status === status}
+                                    onChange={handleChange}
+                                    className="sr-only"
+                                />
+                                <span className="text-[9px] uppercase tracking-widest">
+                                    {status.replace('_', ' ')}
+                                </span>
+                            </label>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Body */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
-
-                    {/* Status Select */}
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">Project Status</label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {['RUNNING', 'ON_HOLD', 'DELAYED', 'COMPLETED'].map(status => (
-                                <label key={status} className={`
-                                    cursor-pointer border rounded-lg p-3 text-center text-xs font-bold transition-all
-                                    ${formData.status === status
-                                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-1 ring-indigo-500'
-                                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}
-                                `}>
-                                    <input
-                                        type="radio"
-                                        name="status"
-                                        value={status}
-                                        checked={formData.status === status}
-                                        onChange={handleChange}
-                                        className="sr-only"
-                                    />
-                                    {status}
-                                </label>
-                            ))}
-                        </div>
+                {/* Details Grid */}
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <InputField
+                            label="Project Name"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            required
+                        />
+                        <InputField
+                            label="Client / Principal"
+                            icon={User}
+                            name="clientName"
+                            value={formData.clientName}
+                            onChange={handleChange}
+                            required
+                        />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Name */}
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Project Name</label>
-                            <input
-                                name="name"
-                                value={formData.name}
-                                onChange={handleChange}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                            />
-                        </div>
-                        {/* Client */}
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Client Name</label>
-                            <div className="relative">
-                                <User className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input
-                                    name="clientName"
-                                    value={formData.clientName}
-                                    onChange={handleChange}
-                                    className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Location & City */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Location</label>
-                            <div className="relative">
-                                <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input
-                                    name="location"
-                                    value={formData.location}
-                                    onChange={handleChange}
-                                    className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">City</label>
+                        <InputField
+                            label="Site Location"
+                            icon={MapPin}
+                            name="location"
+                            value={formData.location}
+                            onChange={handleChange}
+                        />
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em] ml-1">Target Zone (City)</label>
                             <select
                                 name="cityId"
                                 value={formData.cityId}
                                 onChange={handleChange}
-                                className="w-full p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                className="w-full px-4 py-3.5 rounded-xl border border-admin-border bg-admin-bg-secondary text-admin-text focus:border-admin-accent/50 focus:ring-4 focus:ring-admin-accent/5 outline-none text-sm transition-all font-admin font-medium appearance-none shadow-inner"
+                                required
                             >
                                 <option value="">Select City</option>
                                 {cities.map(city => (
@@ -149,62 +167,37 @@ const EditProjectModal = ({ project, cities, supervisors, onClose, onUpdate, isU
                         </div>
                     </div>
 
-                    {/* Supervisor & Start Date */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Supervisor</label>
-                            <div className="relative">
-                                <HardHat className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em] ml-1">Structural Supervisor</label>
+                            <div className="relative group">
+                                <HardHat className="absolute left-4 top-3.5 w-4 h-4 text-admin-text-muted group-focus-within:text-admin-accent transition-colors" />
                                 <select
                                     name="supervisorId"
                                     value={formData.supervisorId}
                                     onChange={handleChange}
-                                    className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                    className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-admin-border bg-admin-bg-secondary text-admin-text focus:border-admin-accent/50 focus:ring-4 focus:ring-admin-accent/5 outline-none text-sm transition-all font-admin font-medium appearance-none shadow-inner"
                                 >
-                                    <option value="">No Supervisor Assigned</option>
+                                    <option value="">Unassigned</option>
                                     {supervisors.map(s => (
                                         <option key={s.id} value={s.id}>{s.username} {s.fullName ? `(${s.fullName})` : ''}</option>
                                     ))}
                                 </select>
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Start Date</label>
-                            <div className="relative">
-                                <Calendar className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input
-                                    type="date"
-                                    name="startDate"
-                                    value={formData.startDate}
-                                    onChange={handleChange}
-                                    className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
-                            </div>
-                        </div>
+                        <InputField
+                            label="Chronological Initiation"
+                            icon={Calendar}
+                            type="date"
+                            name="startDate"
+                            value={formData.startDate}
+                            onChange={handleChange}
+                            required
+                        />
                     </div>
-
-                    {/* Actions */}
-                    <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isUpdating}
-                            className="px-6 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {isUpdating ? <span className="animate-spin">⌛</span> : <Save className="w-4 h-4" />}
-                            Update Project
-                        </button>
-                    </div>
-
-                </form>
-            </div>
-        </div>
+                </div>
+            </form>
+        </Modal>
     );
 };
 

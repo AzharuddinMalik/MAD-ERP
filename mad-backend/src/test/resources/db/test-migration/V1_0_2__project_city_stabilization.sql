@@ -1,0 +1,4 @@
+-- H2-compatible version of project-city stabilization.
+-- Production uses ALTER TABLE ... MODIFY COLUMN which H2 doesn't support.
+-- Tables already have city_id from V1 baseline, so this is a no-op for H2 tests.
+-- Keeping this file to maintain Flyway version parity with production.

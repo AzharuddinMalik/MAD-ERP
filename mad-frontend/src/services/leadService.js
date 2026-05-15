@@ -32,6 +32,7 @@ export const leadService = {
             const response = await api.get('/admin/leads');
             return response.data;
         } catch (error) {
+            if (error.name === 'CanceledError') return [];
             console.error('Error fetching leads:', error);
             throw error;
         }
@@ -60,6 +61,7 @@ export const leadService = {
             const response = await api.get('/admin/leads/stats');
             return response.data;
         } catch (error) {
+            if (error.name === 'CanceledError') return;
             console.error('Error fetching lead stats:', error);
             throw error;
         }

@@ -1,10 +1,11 @@
 import api from '../api/axiosConfig';
 
 export const projectService = {
-    // Fetch all projects
-    getAll: async () => {
-        const { data } = await api.get('/admin/projects');
-        return data;
+    // Fetch all projects (Paginated from Component 4)
+    getAll: async ({ page = 0, size = 100 } = {}) => {
+        const { data } = await api.get('/projects', { params: { page, size } });
+        // Return content array if paginated, otherwise fallback to data
+        return data.content !== undefined ? data.content : data;
     },
 
     // Fetch cities (for the dropdown)

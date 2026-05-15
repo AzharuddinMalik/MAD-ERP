@@ -2,6 +2,7 @@ package net.engineeringdigest.journalApp.security;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -10,11 +11,13 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    // 🔥 FIXED: This key is now 32+ characters long (256-bit secure)
-    private final String SECRET = "MALIK_ART_DECOR_SECURE_KEY_123456789_!@#";
+    // ✅ C1 FIX: JWT secret is now injected from application.properties / environment variable.
+    // Production MUST set JWT_SECRET env var. The fallback is for local dev only.
+    @Value("${jwt.secret}")
+    private String secret;
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(String username, String role) {

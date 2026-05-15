@@ -1,5 +1,8 @@
 package net.engineeringdigest.journalApp.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -10,16 +13,25 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 
+/**
+ * ✅ H5 FIX: Upload directory is now configurable via application.properties.
+ * Defaults to ./uploads/ (external to JAR), safe for production deployment.
+ */
 @Service
 public class FileStorageService {
 
-    private final String UPLOAD_DIR = "uploads/";
+    private static final Logger log = LoggerFactory.getLogger(FileStorageService.class);
 
-    public FileStorageService() {
-        File directory = new File(UPLOAD_DIR);
+    private final String uploadDir;
+
+    public FileStorageService(@Value("${app.upload-dir:./uploads/}") String uploadDir) {
+        this.uploadDir = uploadDir;
+        File directory = new File(uploadDir);
         if (!directory.exists()) {
             directory.mkdirs();
+            log.info("📁 Created upload directory: {}", directory.getAbsolutePath());
         }
+        log.info("📁 Upload directory configured: {}", directory.getAbsolutePath());
     }
 
     public String saveFile(MultipartFile file) throws IOException {
@@ -29,7 +41,7 @@ public class FileStorageService {
 
         // Generate unique filename
         String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-        Path filePath = Paths.get(UPLOAD_DIR + fileName);
+        Path filePath = Paths.get(uploadDir + fileName);
 
         // Compress and Save
         compressAndSave(file, filePath);

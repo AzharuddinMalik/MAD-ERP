@@ -3,6 +3,7 @@ package net.engineeringdigest.journalApp.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -10,58 +11,45 @@ import java.time.LocalDateTime;
 @Table(name = "projects")
 @Data
 @NoArgsConstructor
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Project {
 
-    private int labourCount;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String name; // e.g., "Villa 405 Renovation"
+    @Column(nullable = false, length = 150)
+    private String name; // Maps to UI's projectName via DTO
 
-    @Column(nullable = false)
+    @Column(name = "client_name", nullable = false, length = 100)
     private String clientName;
 
-    // 🟢 UPDATED: Address Breakdown
-    private String location; // Specific address (e.g., "Banjara Hills, Rd 12")
-    private String plotNo;
-    private String colony;
-    private String pincode;
-    private String district;
-    private String state;
-
-    // 🟢 NEW: Project Specifications
-    private String projectType; // "G+3", "Commercial", "Villa"
-    private Double squareFeet;
-    private Double budget; // In raw numbers, UI converts to Lakh/Crore
-
-    // 🟢 NEW: Compliance & Docs
-    private String reraNumber;
-    private String fireNocNumber;
-    private String municipalApprovalUrl; // URL to uploaded doc
-    private String labourLicenseUrl; // URL to uploaded doc
+    private String location;
 
     @Enumerated(EnumType.STRING)
+    @Column(length = 50)
     private ProjectStatus status = ProjectStatus.RUNNING;
 
     private LocalDate startDate;
 
-    // 🔥 NEW: Link to City
-    @ManyToOne
+    private int labourCount;
+
+    // 🔥 CRITICAL: LAZY prevents N+1 JOINs on list endpoints
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "city_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private City city;
 
-    // 🔥 NEW: Link to Supervisor (User)
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supervisor_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User supervisor;
 
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
-
 }

@@ -90,7 +90,7 @@ public class LabourControllerIntegrationTests {
         String json1 = "[{\"labourId\": " + w1.getId() + ", \"projectId\": " + p1.getId()
                 + ", \"status\": \"PRESENT\"}]";
 
-        mockMvc.perform(post("/api/labour/attendance")
+        mockMvc.perform(post("/api/v1/labour/attendance")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json1))
                 .andExpect(status().isOk());
@@ -99,7 +99,7 @@ public class LabourControllerIntegrationTests {
         String json2 = "[{\"labourId\": " + w2.getId() + ", \"projectId\": " + p2.getId()
                 + ", \"status\": \"PRESENT\"}]";
 
-        mockMvc.perform(post("/api/labour/attendance")
+        mockMvc.perform(post("/api/v1/labour/attendance")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json2))
                 .andExpect(status().isBadRequest()) // Expecting 400 or failure

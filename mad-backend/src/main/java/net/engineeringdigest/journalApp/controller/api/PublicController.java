@@ -7,6 +7,8 @@ import net.engineeringdigest.journalApp.repository.BillOfQuantityRepository;
 import net.engineeringdigest.journalApp.repository.LeadInquiryRepository;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
 import net.engineeringdigest.journalApp.service.NotificationService;
+import net.engineeringdigest.journalApp.exception.BusinessRuleException;
+import net.engineeringdigest.journalApp.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/public")
+@RequestMapping("/api/v1/public")
 public class PublicController {
 
     @Autowired
@@ -35,9 +37,8 @@ public class PublicController {
     // Matches ClientView.jsx: api.get(`/public/project/${projectId}`)
     @GetMapping("/project/{id}")
     public ResponseEntity<?> getPublicProjectDetails(@PathVariable Long id) {
-        try {
-            Project project = projectRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
             List<BillOfQuantity> boqList = boqRepository.findByProjectId(id);
 
@@ -54,31 +55,24 @@ public class PublicController {
             response.put("project", projectData);
             response.put("boq", boqList);
 
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
+        return ResponseEntity.ok(response);
     }
 
     // Endpoint to Submit Leads (Hero form / Contact form)
     @PostMapping("/leads")
     public ResponseEntity<?> submitLead(@RequestBody LeadInquiry lead) {
-        try {
-            if (lead.getName() == null || lead.getPhone() == null) {
-                return ResponseEntity.badRequest().body("Name and phone are required");
-            }
-            leadInquiryRepository.save(lead);
+        if (lead.getName() == null || lead.getPhone() == null) {
+            throw new BusinessRuleException("ERR_VALIDATION_FAILED", "Name and phone are required");
+        }
+        leadInquiryRepository.save(lead);
 
             // 📩 Send email notification to Admin asynchronously
             new Thread(() -> {
                 notificationService.sendNewLeadNotification(lead);
             }).start();
 
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Lead submitted successfully");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "Lead submitted successfully");
+        return ResponseEntity.ok(response);
     }
 }

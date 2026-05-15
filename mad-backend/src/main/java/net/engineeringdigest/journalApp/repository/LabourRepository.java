@@ -13,4 +13,7 @@ public interface LabourRepository extends JpaRepository<Labour, Long> {
     List<Labour> findByProjectIdAndType(Long projectId, String type);
 
     long countByProject(net.engineeringdigest.journalApp.model.Project project);
+
+    // ✅ M1 FIX: Efficient cascade delete (includes inactive workers)
+    void deleteByProject_Id(Long projectId);
 }

@@ -1,26 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axiosConfig';
-import {
-    Plus, X, Calculator, Save, Loader2, AlertTriangle, FileText, Ruler
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Ruler, X, Calculator, Save, Loader2, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
+import { useToast } from './ui/Toast';
+import Modal, { ModalPrimaryButton, ModalCancelButton } from './ui/Modal';
 
 const DailyMeasurementsForm = ({ selectedBoqItem, onClose, onSuccess }) => {
-    // Safety Check
     if (!selectedBoqItem) return null;
 
     const [formData, setFormData] = useState({
         length: '',
-        width: '', // For breadth/height
-        todayQty: 0, // Calculated
+        width: '',
+        todayQty: 0,
         remarks: '',
-        supervisorName: 'Supervisor' // Default
+        supervisorName: 'Supervisor'
     });
 
     const [loading, setLoading] = useState(false);
     const [calculatedValue, setCalculatedValue] = useState(0);
+    const { showToast } = useToast();
 
-    // Auto-fill Supervisor Name
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
@@ -28,19 +26,13 @@ const DailyMeasurementsForm = ({ selectedBoqItem, onClose, onSuccess }) => {
         }
     }, []);
 
-    // Dynamic Calculation Logic
     useEffect(() => {
         const l = parseFloat(formData.length) || 0;
         const w = parseFloat(formData.width) || 0;
         let qty = 0;
 
-        if (selectedBoqItem.unit === 'SFT') {
-            qty = l * w; // Area
-        } else if (selectedBoqItem.unit === 'RFT') {
-            qty = l; // Length only
-        } else if (selectedBoqItem.unit === 'CUM') {
-            qty = l * w; // Simplification (usually L*W*H, but form only has 2 inputs. Assuming 2D or pre-calc). 
-            // Note: If CUM needs 3 dims, we might need a 3rd field. For now keeping as is to avoid logic break.
+        if (selectedBoqItem.unit === 'SFT' || selectedBoqItem.unit === 'CUM') {
+            qty = l * w;
         } else {
             qty = l;
         }
@@ -52,10 +44,10 @@ const DailyMeasurementsForm = ({ selectedBoqItem, onClose, onSuccess }) => {
     const isOverLimit = calculatedValue > remainingScope;
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
 
         if (calculatedValue <= 0) {
-            toast.error('Please enter valid measurements.');
+            showToast('error', "Invalid Entry", { description: "Please enter valid site dimensions." });
             return;
         }
 
@@ -64,126 +56,118 @@ const DailyMeasurementsForm = ({ selectedBoqItem, onClose, onSuccess }) => {
             await api.post('/measurements/record', {
                 boqId: selectedBoqItem.id,
                 length: parseFloat(formData.length) || 0,
-                width: parseFloat(formData.width) || 0, // Sending width
+                width: parseFloat(formData.width) || 0,
                 remarks: formData.remarks,
                 supervisorName: formData.supervisorName
             });
 
-            toast.success('Measurement logged successfully!');
+            showToast('success', "Measurement Recorded", { description: `${calculatedValue} ${selectedBoqItem.unit} added to audit.` });
             if (onSuccess) onSuccess();
             if (onClose) onClose();
 
         } catch (err) {
-            console.error("Submission failed", err);
-            toast.error(err.response?.data || "Failed to submit measurement.");
+            showToast('error', "Sync failure", { description: err.response?.data || "Failed to log measurement." });
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-brand-600 to-indigo-600 p-6 flex justify-between items-start text-white">
-                    <div>
-                        <h3 className="font-bold text-lg flex items-center gap-2">
-                            <Ruler className="w-5 h-5" />
-                            Log Measurement
-                        </h3>
-                        <p className="text-brand-100 text-xs mt-1">
-                            {selectedBoqItem.itemName} ({selectedBoqItem.unit})
-                        </p>
-                    </div>
+        <Modal
+            isOpen={!!selectedBoqItem}
+            onClose={onClose}
+            title="Field Log Entry"
+            icon={<Calculator className="w-6 h-6 text-admin-accent" />}
+            footer={
+                <div className="flex flex-col gap-4 w-full">
                     <button
-                        onClick={onClose}
-                        className="p-1 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                        onClick={handleSubmit}
+                        disabled={loading || calculatedValue <= 0 || isOverLimit}
+                        className="btn-premium w-full py-6 justify-center text-sm font-black uppercase tracking-[0.4em]"
                     >
-                        <X className="w-5 h-5" />
+                        {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-5 h-5 mr-3" />}
+                        {loading ? 'SYNCING...' : 'COMMIT ENTRY'}
+                    </button>
+                    <button onClick={onClose} className="w-full py-4 text-[10px] font-black text-admin-text-muted uppercase tracking-widest hover:text-admin-text transition-colors">
+                        Discard Draft
                     </button>
                 </div>
-
-                {/* Body */}
-                <div className="p-6">
-                    <div className="mb-6 flex gap-4 text-sm">
-                        <div className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                            <p className="text-slate-400 text-xs font-bold uppercase">Total Scope</p>
-                            <p className="font-bold text-slate-800">{selectedBoqItem.totalScope}</p>
-                        </div>
-                        <div className="flex-1 bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
-                            <p className="text-emerald-600/70 text-xs font-bold uppercase">Remaining</p>
-                            <p className="font-bold text-emerald-700">{remainingScope.toFixed(2)}</p>
-                        </div>
+            }
+        >
+            <div className="space-y-10 py-4">
+                {/* Editorial Context */}
+                <div className="space-y-2">
+                    <p className="text-[10px] font-black text-admin-accent uppercase tracking-[0.4em] mb-1">Item Reference</p>
+                    <h3 className="text-3xl font-black text-admin-text uppercase tracking-tighter leading-none">{selectedBoqItem.itemName}</h3>
+                    <div className="flex items-center gap-2 pt-2">
+                        <span className="px-3 py-1 bg-admin-bg-tertiary border-2 border-admin-border rounded-full text-[10px] font-black text-admin-text-muted uppercase tracking-widest">{selectedBoqItem.unit}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-admin-border" />
+                        <span className="text-[10px] font-black text-admin-text-muted uppercase tracking-widest">Target: {selectedBoqItem.totalScope}</span>
                     </div>
-
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Length (ft)</label>
-                                <input
-                                    type="number" step="0.01"
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand-100 focus:border-brand-500 outline-none transition-all font-bold text-slate-800"
-                                    placeholder="0.00"
-                                    value={formData.length}
-                                    onChange={(e) => setFormData({ ...formData, length: e.target.value })}
-                                    required
-                                    autoFocus
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">
-                                    {selectedBoqItem.unit === 'SFT' ? 'Width (ft)' : 'Multiplier'}
-                                </label>
-                                <input
-                                    type="number" step="0.01"
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand-100 focus:border-brand-500 outline-none transition-all font-bold text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    placeholder="1.00"
-                                    value={formData.width}
-                                    onChange={(e) => setFormData({ ...formData, width: e.target.value })}
-                                    disabled={['RFT', 'NOS', 'LUMP'].includes(selectedBoqItem.unit)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Calculation Result */}
-                        <div className={`flex justify-between items-center p-4 rounded-xl border-2 ${isOverLimit ? 'bg-red-50 border-red-100 text-red-700' : 'bg-indigo-50 border-indigo-100 text-indigo-900'}`}>
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isOverLimit ? 'bg-red-100 text-red-600' : 'bg-white text-indigo-600'}`}>
-                                    <Calculator className="w-5 h-5" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold opacity-70">Calculated Qty</span>
-                                    <strong className="text-xl leading-none">{calculatedValue} <span className="text-sm font-normal opacity-70">{selectedBoqItem.unit}</span></strong>
-                                </div>
-                            </div>
-                            {isOverLimit && <AlertTriangle className="w-6 h-6 text-red-500 animate-pulse" />}
-                        </div>
-                        {isOverLimit && <p className="text-xs text-center text-red-500 font-bold -mt-3">⚠️ This measurement exceeds the remaining scope!</p>}
-
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Remarks / Location</label>
-                            <textarea
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-brand-100 focus:border-brand-500 outline-none transition-all text-sm min-h-[80px]"
-                                placeholder="e.g. Living room wall, north side..."
-                                value={formData.remarks}
-                                onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                            ></textarea>
-                        </div>
-
-                        <div className="pt-2">
-                            <button
-                                type="submit"
-                                disabled={loading || calculatedValue <= 0}
-                                className="w-full py-4 bg-brand-600 text-white rounded-xl font-bold text-lg hover:bg-brand-700 hover:shadow-lg hover:shadow-brand-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] flex justify-center items-center gap-2"
-                            >
-                                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                                Save Measurement
-                            </button>
-                        </div>
-                    </form>
                 </div>
+
+                {/* Metric Matrix */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-6 bg-admin-bg-tertiary border-2 border-admin-border rounded-[2rem] shadow-inner">
+                        <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-widest mb-2">Remaining</p>
+                        <p className={`text-2xl font-black ${remainingScope > 0 ? 'text-admin-success' : 'text-admin-danger'} tracking-tighter`}>{remainingScope.toFixed(2)}</p>
+                    </div>
+                    <div className={`p-6 border-2 rounded-[2rem] shadow-premium transition-all ${isOverLimit ? 'bg-admin-danger/10 border-admin-danger shadow-[0_0_20px_rgba(239,68,68,0.2)]' : 'bg-admin-accent/5 border-admin-accent'}`}>
+                        <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-widest mb-2">New Entry</p>
+                        <p className={`text-2xl font-black ${isOverLimit ? 'text-admin-danger' : 'text-admin-accent'} tracking-tighter`}>{calculatedValue}</p>
+                    </div>
+                </div>
+
+                {/* Tactile Dimension Input */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-widest ml-1">Length (FT)</label>
+                        <input
+                            type="number" step="0.01"
+                            className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border rounded-[2rem] text-4xl font-black text-admin-text focus:border-admin-accent outline-none shadow-inner transition-all text-center"
+                            placeholder="0.00"
+                            value={formData.length}
+                            onChange={(e) => setFormData({ ...formData, length: e.target.value })}
+                            autoFocus
+                        />
+                    </div>
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-widest ml-1">
+                            {['RFT', 'NOS', 'LUMP'].includes(selectedBoqItem.unit) ? 'Multiplier' : 'Width (FT)'}
+                        </label>
+                        <input
+                            type="number" step="0.01"
+                            className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border rounded-[2rem] text-4xl font-black text-admin-text focus:border-admin-accent outline-none shadow-inner transition-all text-center disabled:opacity-20"
+                            placeholder="1.00"
+                            value={formData.width}
+                            onChange={(e) => setFormData({ ...formData, width: e.target.value })}
+                            disabled={['RFT', 'NOS', 'LUMP'].includes(selectedBoqItem.unit)}
+                        />
+                    </div>
+                </div>
+
+                {/* Remark Field */}
+                <div className="space-y-3">
+                    <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-widest ml-1">Work Annotation / Floor Marking</label>
+                    <textarea
+                        rows="3"
+                        className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border rounded-[2rem] text-sm font-black uppercase tracking-tight text-admin-text focus:border-admin-accent outline-none shadow-inner placeholder:text-admin-text-muted/30"
+                        placeholder="E.G. GROUND FLOOR LOBBY, NORTH WALL..."
+                        value={formData.remarks}
+                        onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                    />
+                </div>
+
+                {isOverLimit && (
+                    <div className="flex items-center gap-4 p-6 bg-admin-danger/10 border-2 border-admin-danger rounded-[1.5rem] animate-pulse">
+                        <AlertTriangle className="w-6 h-6 text-admin-danger" />
+                        <p className="text-[10px] font-black text-admin-danger uppercase tracking-widest leading-relaxed">
+                            Critical: Entry exceeds remaining manifest scope. Review dimensions before commit.
+                        </p>
+                    </div>
+                )}
             </div>
-        </div>
+        </Modal>
     );
 };
 

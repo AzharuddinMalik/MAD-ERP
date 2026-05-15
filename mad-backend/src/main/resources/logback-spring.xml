@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  C3.4: Production Logging Configuration
+  - Rolling file appender: 100MB per file, 30 days history
+  - Console: colored output for local dev
+  - Pattern: timestamps, thread, level, logger (no raw passwords/tokens)
+-->
+<configuration>
+
+    <!-- ══════════════════════════════════════════
+         CONSOLE APPENDER (dev / Docker stdout)
+         ══════════════════════════════════════════ -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ══════════════════════════════════════════
+         ROLLING FILE APPENDER (prod)
+         100MB per file, 30 days, 3GB total cap
+         ══════════════════════════════════════════ -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE:-./logs/mad-erp/app.log}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- Daily rotation -->
+            <fileNamePattern>${LOG_FILE:-./logs/mad-erp/app}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy
+                    class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <!-- 🔒 No %exception to prevent stack trace leakage in raw log files -->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{50} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ══════════════════════════════════════════
+         AUDIT-SPECIFIC LOG (security operations)
+         Separate file for audit trail review
+         ══════════════════════════════════════════ -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE:-./logs/mad-erp/audit.log}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE:-./logs/mad-erp/audit}.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+            <maxHistory>90</maxHistory><!-- 90-day audit trail retention -->
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} AUDIT [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ══════════════════════════════════════════
+         C3.4: PII SANITIZATION POLICY
+         Suppress verbose/credential-leaking loggers
+         ══════════════════════════════════════════ -->
+
+    <!-- Suppress Hibernate SQL parameter binding (would show passwords in queries) -->
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Suppress Spring Security internals (token details) -->
+    <logger name="org.springframework.security" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Suppress Hibernate SQL in production -->
+    <logger name="org.hibernate.SQL" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+
+    <!-- Audit logger — dedicated appender -->
+    <logger name="net.engineeringdigest.journalApp.security.AuditAuthenticationEntryPoint" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+    <logger name="net.engineeringdigest.journalApp.security.AuditLoggingFilter" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+    </logger>
+    <logger name="net.engineeringdigest.journalApp.config.RateLimitFilter" level="WARN" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- Application logger -->
+    <logger name="net.engineeringdigest.journalApp" level="INFO" additivity="false">
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!-- ══════════════════════════════════════════
+         PROFILE-BASED ROOT CONFIGURATION
+         ══════════════════════════════════════════ -->
+    <springProfile name="prod">
+        <root level="WARN">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+</configuration>

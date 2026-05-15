@@ -4,5 +4,6 @@ public enum ProjectStatus {
     RUNNING,
     COMPLETED,
     ON_HOLD,
-    DELAYED
+    DELAYED,
+    INVOICED
 }

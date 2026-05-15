@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import api from '../api/axiosConfig';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { workerService } from '../services/workerService';
 import { attendanceService } from '../services/attendanceService';
 import {
     Users, Plus, Save, UserCheck, UserX, Clock,
-    ArrowLeft, HardHat, Loader2, Edit2, Trash2, X,
-    CheckCircle2, AlertCircle, Search, Filter
+    ArrowLeft, HardHat, Loader2, Edit2, Trash2, X, Lock,
+    CheckCircle2, AlertCircle, Search, Filter, IndianRupee, UserPlus,
+    TrendingUp, Activity, Coins, Fingerprint, Calendar
 } from 'lucide-react';
+import { useToast } from './ui/Toast';
+import Modal, { ModalPrimaryButton, ModalCancelButton } from './ui/Modal';
+import PageHeader from './ui/PageHeader';
+import { SkeletonTable } from './ui/Skeleton';
+import Tooltip from './ui/Tooltip';
 
 const LabourManagement = () => {
     const { projectId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
+    const { showToast } = useToast();
     const projectName = location.state?.projectName || `Project #${projectId}`;
 
     const [activeTab, setActiveTab] = useState('attendance');
@@ -19,7 +27,7 @@ const LabourManagement = () => {
     const [attendanceState, setAttendanceState] = useState({});
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [duplicateWarnings, setDuplicateWarnings] = useState([]); // Store duplicate warnings
+    const [duplicateWarnings, setDuplicateWarnings] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Add/Edit Form State
@@ -27,22 +35,28 @@ const LabourManagement = () => {
     const [editingId, setEditingId] = useState(null);
     const [formData, setFormData] = useState({ name: '', type: 'Helper', wage: '' });
 
-    // 1. Fetch Team
+    const [project, setProject] = useState(null);
+
+    // 1. Fetch Team & Project Context
     const fetchTeam = async () => {
         setLoading(true);
         try {
-            // Use centralized service
-            const data = await workerService.getWorkersByProject(projectId);
-            setWorkers(data);
+            // Fetch Workers
+            const workersData = await workerService.getWorkersByProject(projectId);
+            setWorkers(workersData);
 
-            // Initialize attendance state (Default: Present)
+            // Fetch Project Status
+            const { data: projectData } = await api.get(`/admin/projects/${projectId}`);
+            setProject(projectData);
+
             const initialAttendance = {};
-            data.forEach(w => {
+            workersData.forEach(w => {
                 initialAttendance[w.id] = 'PRESENT';
             });
             setAttendanceState(initialAttendance);
         } catch (err) {
-            console.error("Failed to load team", err);
+            if (err.name === 'CanceledError') return;
+            console.error("Failed to load project context", err);
         } finally {
             setLoading(false);
         }
@@ -52,12 +66,16 @@ const LabourManagement = () => {
         fetchTeam();
     }, [projectId]);
 
-    // Check for duplicates when form data changes
+    const isFinalized = project?.status === 'COMPLETED' || project?.status === 'INVOICED';
+
     useEffect(() => {
-        if (!formData.name) return;
+        if (!formData.name) {
+            setDuplicateWarnings([]);
+            return;
+        }
 
         const possibleDuplicates = workers.filter(w =>
-            w.id !== editingId && // Don't compare with self
+            w.id !== editingId &&
             w.name.toLowerCase().includes(formData.name.toLowerCase())
         );
 
@@ -71,13 +89,11 @@ const LabourManagement = () => {
         setIsSubmitting(true);
         try {
             if (editingId) {
-                // UPDATE via Service
                 await workerService.updateWorker(editingId, { ...formData, projectId });
-                alert("Worker updated successfully!");
+                showToast('success', `Worker "${formData.name}" updated successfully.`);
             } else {
-                // CREATE via Service
                 await workerService.createWorker({ ...formData, projectId });
-                alert("Worker added successfully!");
+                showToast('success', `Worker "${formData.name}" added to the project.`);
             }
             setIsFormOpen(false);
             setEditingId(null);
@@ -85,7 +101,7 @@ const LabourManagement = () => {
             setDuplicateWarnings([]);
             fetchTeam();
         } catch (err) {
-            alert("Operation failed. Check console.");
+            showToast('error', "Operation failed. Check system logs.");
             console.error(err);
         } finally {
             setIsSubmitting(false);
@@ -93,15 +109,14 @@ const LabourManagement = () => {
     };
 
     // 3. Handle Delete
-    const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure? This will remove the worker from this project.")) return;
+    const handleDelete = async (id, name) => {
+        if (!window.confirm(`Are you sure you want to remove ${name} from this project?`)) return;
         try {
-            // Delete via Service
             await workerService.deleteWorker(id);
-            alert("Worker removed.");
+            showToast('success', `${name} removed from project.`);
             fetchTeam();
         } catch (err) {
-            alert("Failed to delete.");
+            showToast('error', "Failed to remove worker.");
         }
     };
 
@@ -122,14 +137,13 @@ const LabourManagement = () => {
         }));
 
         try {
-            // Submit via Service
             await attendanceService.markAttendance(payload);
-            alert("✅ Attendance Saved Successfully!");
+            showToast('success', "Attendance Saved Successfully!", { description: "Work logs for today have been archived." });
             navigate(-1);
         } catch (err) {
             console.error(err);
             const errorMessage = err.response?.data || err.message || "Server Error";
-            alert("❌ Failed to save attendance: " + errorMessage);
+            showToast('error', "Failed to save attendance", { description: errorMessage });
         } finally {
             setIsSubmitting(false);
         }
@@ -144,278 +158,291 @@ const LabourManagement = () => {
         w.type.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    if (loading) return <div className="flex justify-center items-center h-screen bg-slate-50 text-brand-600"><Loader2 className="w-10 h-10 animate-spin" /></div>;
+    const stats = {
+        total: workers.length,
+        present: Object.values(attendanceState).filter(s => s === 'PRESENT').length,
+        half: Object.values(attendanceState).filter(s => s === 'HALF_DAY').length,
+        dailyWage: workers.reduce((acc, w) => acc + (w.dailyWage || 0), 0)
+    };
+
+    if (loading && !project) return (
+        <div className="space-y-6 max-w-7xl mx-auto p-8">
+            <SkeletonTable rows={10} cols={4} />
+        </div>
+    );
 
     return (
-        <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-900">
-            <div className="max-w-5xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <button onClick={() => navigate(-1)} className="flex items-center text-slate-500 mb-2 hover:text-brand-600 transition-colors text-sm font-medium">
-                            <ArrowLeft className="w-4 h-4 mr-1" /> Back to Project
-                        </button>
-                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Labour Management</h1>
-                        <p className="text-slate-500 flex items-center gap-2 mt-1">
-                            <HardHat className="w-4 h-4 text-slate-400" />
-                            {projectName}
-                        </p>
+        <div className="font-admin text-admin-text space-y-12 max-w-5xl mx-auto px-4 md:px-0 mb-24 relative animate-fade-in">
+            {/* Editorial Header */}
+            <div className="flex justify-between items-end mb-16 pt-8">
+                <div className="space-y-3">
+                    <h1 className="text-editorial-title">Labour Portal</h1>
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-admin-accent animate-pulse" />
+                        <p className="text-[10px] font-black text-admin-accent uppercase tracking-[0.4em]">{projectName}</p>
                     </div>
+                </div>
+                <button 
+                    onClick={() => navigate(-1)} 
+                    className="p-4 bg-admin-bg-secondary border border-admin-border text-admin-text-muted hover:text-admin-accent rounded-full transition-all hover:scale-110 shadow-premium group"
+                >
+                    <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                </button>
+            </div>
 
-                    {/* Search & Filter */}
-                    <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            {/* High-Density Metrics Ribbon */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                    { label: 'Site Crew', val: stats.total, icon: Users, color: 'emerald' },
+                    { label: 'Present', val: stats.present, icon: Activity, color: 'blue' },
+                    { label: 'Half Day', val: stats.half, icon: Clock, color: 'amber' },
+                    { label: 'Est. Daily', val: `₹${stats.dailyWage}`, icon: Coins, color: 'purple', tooltip: "Projected daily expenditure based on present crew." }
+                ].map((s, i) => (
+                    <Tooltip key={i} content={s.tooltip || `${s.label} count for current site manifest.`} position="bottom">
+                        <div className="admin-card p-6 flex items-center gap-4 border-l-4 h-full" style={{ borderLeftColor: `var(--admin-${s.color})` }}>
+                            <div className={`p-3 rounded-xl bg-admin-bg-tertiary text-admin-${s.color} shadow-inner`}>
+                                <s.icon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-[0.2em]">{s.label}</p>
+                                <h4 className="text-xl font-black tracking-tight">{s.val}</h4>
+                            </div>
+                        </div>
+                    </Tooltip>
+                ))}
+            </div>
+
+            {/* Mobile-Optimized Tab Switcher */}
+            <div className="flex p-2 bg-admin-bg-secondary rounded-[2rem] border-2 border-admin-border shadow-inner-soft">
+                <button
+                    onClick={() => setActiveTab('attendance')}
+                    className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center justify-center gap-2 ${activeTab === 'attendance' ? 'bg-admin-accent text-white shadow-premium' : 'text-admin-text-muted hover:text-admin-text'}`}
+                >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Daily Roster
+                </button>
+                <button
+                    onClick={() => setActiveTab('team')}
+                    className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center justify-center gap-2 ${activeTab === 'team' ? 'bg-admin-accent text-white shadow-premium' : 'text-admin-text-muted hover:text-admin-text'}`}
+                >
+                    <Users className="w-3.5 h-3.5" />
+                    Manage Team
+                </button>
+            </div>
+
+            <div className="space-y-8">
+                {activeTab === 'attendance' && (
+                    <div className="space-y-8">
+                        {/* Finalized Warning */}
+                        {isFinalized && (
+                            <div className="admin-card bg-red-500/10 border-red-500/20 p-6 flex items-start gap-4 animate-shake">
+                                <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+                                <div>
+                                    <h4 className="text-sm font-black text-red-500 uppercase tracking-widest">Operation Locked</h4>
+                                    <p className="text-xs text-admin-text-secondary mt-1 leading-relaxed">
+                                        Site archived. Attendance records are now immutable.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Search Bar */}
+                        <div className="relative group">
+                            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-admin-text-muted group-focus-within:text-admin-accent transition-colors opacity-40" />
                             <input
                                 type="text"
-                                placeholder="Search workers..."
+                                placeholder="IDENTIFY PERSONNEL..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9 pr-4 py-2 rounded-lg text-sm outline-none focus:bg-slate-50 transition-colors w-48 md:w-64"
+                                className="w-full pl-16 pr-8 py-6 bg-admin-bg-secondary border-2 border-admin-border rounded-[2rem] text-xs font-black uppercase tracking-widest focus:border-admin-accent outline-none shadow-inner-soft transition-all disabled:opacity-50"
+                                disabled={isFinalized}
                             />
                         </div>
-                        <div className="w-px h-6 bg-slate-200"></div>
-                        <button className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded-lg transition-colors">
-                            <Filter className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
 
-                {/* Main Content Card */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    {/* Tabs */}
-                    <div className="flex border-b border-slate-100">
-                        <button
-                            onClick={() => setActiveTab('attendance')}
-                            className={`flex-1 py-4 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'attendance' ? 'border-brand-600 text-brand-600 bg-brand-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                        >
-                            Daily Attendance
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('team')}
-                            className={`flex-1 py-4 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'team' ? 'border-brand-600 text-brand-600 bg-brand-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-                        >
-                            Manage Team
-                        </button>
-                    </div>
-
-                    <div className="p-6">
-                        {/* TAB 1: ATTENDANCE */}
-                        {activeTab === 'attendance' && (
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center text-brand-600">
-                                            <Clock className="w-5 h-5" />
+                        {/* Worker Matrix */}
+                        <div className={`space-y-4 ${isFinalized ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {filteredWorkers.map(worker => (
+                                <div key={worker.id} className="admin-card p-6 sm:p-8 hover:bg-admin-bg-secondary transition-all group relative overflow-hidden border-b-4 border-b-admin-border">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-8">
+                                        <div className="flex items-center gap-6">
+                                            <div className="w-14 h-14 bg-admin-bg-tertiary rounded-2xl flex items-center justify-center text-admin-accent border-2 border-admin-border shadow-inner font-black text-xl transition-all duration-500 group-hover:bg-admin-accent group-hover:text-white">
+                                                {worker.name.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xl font-black text-admin-text uppercase tracking-tight">{worker.name}</h4>
+                                                    {attendanceState[worker.id] === 'PRESENT' && (
+                                                        <Tooltip content="Personnel is active and on-site today.">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                        </Tooltip>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-1.5">
+                                                    <span className="text-[9px] font-black text-admin-accent uppercase tracking-widest bg-admin-accent/10 px-2.5 py-1 rounded-md">{worker.type}</span>
+                                                    <span className="text-[9px] font-black text-admin-text-muted uppercase tracking-widest font-mono">₹{worker.dailyWage}/D</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-slate-800">Mark Attendance</h3>
-                                            <p className="text-xs text-slate-500">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+
+                                        {/* Tactile Status Toggles */}
+                                        <div className="flex gap-2 p-1.5 bg-admin-bg-tertiary rounded-[1.2rem] border-2 border-admin-border shadow-inner">
+                                            {[
+                                                { id: 'PRESENT', label: 'PRESENT', color: 'emerald' },
+                                                { id: 'HALF_DAY', label: 'HALF', color: 'amber' },
+                                                { id: 'ABSENT', label: 'ABSENT', color: 'red' }
+                                            ].map(status => (
+                                                <button
+                                                    key={status.id}
+                                                    onClick={() => toggleStatus(worker.id, status.id)}
+                                                    className={`px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${attendanceState[worker.id] === status.id ? `bg-${status.color}-500 text-white shadow-premium scale-[1.02]` : 'text-admin-text-muted hover:bg-admin-border'}`}
+                                                >
+                                                    {status.label}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
-                                    <span className="text-xs font-bold bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-600 shadow-sm">
-                                        Total: {workers.length}
-                                    </span>
                                 </div>
+                            ))}
+                        </div>
 
-                                <div className="space-y-3">
-                                    {filteredWorkers.map(worker => (
-                                        <div key={worker.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-brand-200 hover:shadow-md transition-all group bg-white">
-                                            <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                                <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center text-slate-600 font-bold text-lg shadow-inner">
-                                                    {worker.name.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{worker.name}</p>
-                                                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                        <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">{worker.type}</span>
-                                                        <span>•</span>
-                                                        <span>₹{worker.dailyWage}/day</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex flex-wrap gap-2 p-1 bg-slate-50 rounded-lg border border-slate-100 w-full sm:w-fit">
-                                                <button
-                                                    onClick={() => toggleStatus(worker.id, 'PRESENT')}
-                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'PRESENT' ? 'bg-white text-green-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-                                                >
-                                                    <CheckCircle2 className="w-4 h-4" /> Present
-                                                </button>
-                                                <button
-                                                    onClick={() => toggleStatus(worker.id, 'HALF_DAY')}
-                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'HALF_DAY' ? 'bg-white text-amber-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-                                                >
-                                                    <Clock className="w-4 h-4" /> Half Day
-                                                </button>
-                                                <button
-                                                    onClick={() => toggleStatus(worker.id, 'ABSENT')}
-                                                    className={`flex-1 sm:flex-none px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center justify-center gap-2 ${attendanceState[worker.id] === 'ABSENT' ? 'bg-white text-red-600 shadow-sm ring-1 ring-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-                                                >
-                                                    <UserX className="w-4 h-4" /> Absent
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {filteredWorkers.length === 0 && (
-                                        <div className="p-12 text-center">
-                                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                <Users className="w-8 h-8 text-slate-400" />
-                                            </div>
-                                            <h3 className="text-slate-900 font-bold mb-1">No Workers Found</h3>
-                                            <p className="text-slate-500 text-sm">Try adjusting your search or add a new worker.</p>
-                                        </div>
-                                    )}
-                                </div>
-                                {workers.length > 0 && (
-                                    <div className="pt-4 border-t border-slate-100 sticky bottom-0 bg-white p-4 -mx-6 -mb-6 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                                        <button
-                                            onClick={submitAttendance}
-                                            disabled={isSubmitting}
-                                            className={`w-full py-4 bg-gradient-to-r from-brand-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-brand-200 transition-all flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:scale-[1.01]'}`}
-                                        >
-                                            {isSubmitting ? (
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                            ) : (
-                                                <Save className="w-5 h-5" />
-                                            )}
-                                            {isSubmitting ? 'Saving...' : 'Save Daily Attendance'}
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* TAB 2: MANAGE TEAM */}
-                        {activeTab === 'team' && (
-                            <div className="space-y-6">
-                                {!isFormOpen ? (
-                                    <button
-                                        onClick={() => { setIsFormOpen(true); setEditingId(null); setFormData({ name: '', type: 'Helper', wage: '' }); }}
-                                        className="w-full py-4 border-2 border-dashed border-slate-300 text-slate-500 rounded-xl font-bold hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-all flex justify-center items-center gap-2 group"
-                                    >
-                                        <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-brand-100 flex items-center justify-center transition-colors">
-                                            <Plus className="w-5 h-5" />
-                                        </div>
-                                        <span>Add New Worker to Team</span>
-                                    </button>
-                                ) : (
-                                    <form onSubmit={handleFormSubmit} className="bg-slate-50 p-6 rounded-xl border border-brand-100 relative animate-in fade-in slide-in-from-top-4 duration-300">
-                                        <button type="button" onClick={() => setIsFormOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-full transition-colors">
-                                            <X className="w-5 h-5" />
-                                        </button>
-                                        <h3 className="font-bold text-lg text-slate-900 mb-6 flex items-center gap-2">
-                                            {editingId ? <Edit2 className="w-5 h-5 text-brand-600" /> : <Plus className="w-5 h-5 text-brand-600" />}
-                                            {editingId ? 'Edit Worker Details' : 'Add New Worker'}
-                                        </h3>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                            <div className="md:col-span-2 space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Full Name</label>
-                                                <input
-                                                    placeholder="e.g. Rajesh Kumar"
-                                                    className="w-full p-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all"
-                                                    value={formData.name}
-                                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                                    required
-                                                />
-                                                {duplicateWarnings.length > 0 && (
-                                                    <div className="mt-2 p-2 bg-amber-50 text-amber-700 text-xs rounded-lg border border-amber-100 flex items-start gap-2">
-                                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                                                        <div>
-                                                            <p className="font-bold">Possible duplicate(s) found:</p>
-                                                            <ul className="list-disc list-inside">
-                                                                {duplicateWarnings.map(w => (
-                                                                    <li key={w.id}>{w.name} ({w.type})</li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Role</label>
-                                                <select
-                                                    className="w-full p-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none bg-white transition-all"
-                                                    value={formData.type}
-                                                    onChange={e => setFormData({ ...formData, type: e.target.value })}
-                                                >
-                                                    <option>Mason</option>
-                                                    <option>Helper</option>
-                                                    <option>Carpenter</option>
-                                                    <option>Painter</option>
-                                                    <option>Supervisor</option>
-                                                    <option>Electrician</option>
-                                                    <option>Plumber</option>
-                                                </select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Daily Wage</label>
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-3 text-slate-400 font-bold">₹</span>
-                                                    <input
-                                                        type="number"
-                                                        placeholder="0.00"
-                                                        className="w-full pl-8 p-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all"
-                                                        value={formData.wage}
-                                                        onChange={e => setFormData({ ...formData, wage: e.target.value })}
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-3 pt-4 border-t border-slate-200">
-                                            <button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                                            <button
-                                                type="submit"
-                                                disabled={isSubmitting}
-                                                className={`flex-1 py-3 bg-brand-600 text-white rounded-xl font-bold shadow-lg shadow-brand-200 transition-colors flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-brand-700'}`}
-                                            >
-                                                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                                                {editingId ? 'Update Worker Details' : 'Add to Team'}
-                                            </button>
-                                        </div>
-                                    </form>
-                                )}
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {filteredWorkers.map(w => (
-                                        <div key={w.id} className="relative bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => openEditForm(w)}
-                                                    className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(w.id)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-
-                                            <div className="flex flex-col items-center text-center mb-4">
-                                                <div className="w-16 h-16 bg-gradient-to-br from-brand-100 to-indigo-100 rounded-2xl flex items-center justify-center text-brand-600 font-bold text-2xl mb-3 shadow-inner">
-                                                    {w.name.charAt(0)}
-                                                </div>
-                                                <h3 className="font-bold text-slate-900 text-lg">{w.name}</h3>
-                                                <p className="text-sm text-slate-500 font-medium">{w.type}</p>
-                                            </div>
-
-                                            <div className="flex items-center justify-between py-3 px-4 bg-slate-50 rounded-xl border border-slate-100">
-                                                <span className="text-xs text-slate-500 font-bold uppercase">Daily Wage</span>
-                                                <span className="font-bold text-slate-800">₹{w.dailyWage}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        {/* Sticky Action Button */}
+                        <div className="pt-12 sticky bottom-8 z-10">
+                            <button
+                                onClick={submitAttendance}
+                                disabled={isSubmitting || workers.length === 0 || isFinalized}
+                                className="btn-premium w-full py-8 text-sm font-black uppercase tracking-[0.3em] justify-center shadow-premium-lg disabled:opacity-50"
+                            >
+                                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                                {isSubmitting ? 'Syncing Manifest...' : 'Commit Daily Log'}
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
+
+                {activeTab === 'team' && (
+                    <div className="space-y-12">
+                        {/* Onboard Button */}
+                        <button
+                            onClick={() => { setIsFormOpen(true); setEditingId(null); setFormData({ name: '', type: 'Mason', wage: '' }); }}
+                            disabled={isFinalized}
+                            className="w-full admin-card border-dashed p-12 flex flex-col items-center gap-4 hover:border-admin-accent hover:bg-admin-accent/5 transition-all group disabled:opacity-30"
+                        >
+                            <div className="w-16 h-16 bg-admin-bg-tertiary rounded-full flex items-center justify-center border-2 border-admin-border shadow-inner group-hover:bg-admin-accent group-hover:text-white transition-all">
+                                <UserPlus className="w-8 h-8" />
+                            </div>
+                            <div className="text-center">
+                                <h3 className="text-xl font-black uppercase tracking-tight">Onboard Specialist</h3>
+                                <p className="text-[9px] font-black text-admin-text-muted uppercase tracking-[0.2em] mt-1">Add a new specialist to the site roster</p>
+                            </div>
+                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {filteredWorkers.map(w => (
+                                <div key={w.id} className="admin-card p-8 group relative overflow-hidden bg-admin-bg-secondary/50 border-b-8 border-b-admin-border">
+                                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => openEditForm(w)} className="p-2.5 bg-admin-bg-tertiary text-admin-text-muted hover:text-admin-accent rounded-xl border border-admin-border shadow-inner transition-all"><Edit2 className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDelete(w.id, w.name)} className="p-2.5 bg-admin-bg-tertiary text-admin-text-muted hover:text-admin-danger rounded-xl border border-admin-border shadow-inner transition-all"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                    
+                                    <div className="flex items-start gap-6">
+                                        <div className="w-20 h-20 bg-admin-bg-tertiary rounded-3xl flex items-center justify-center text-admin-accent border-4 border-admin-border shadow-inner font-black text-3xl group-hover:bg-admin-accent group-hover:text-white transition-all">
+                                            {w.name.charAt(0)}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-[0.3em] mb-1">Worker ID: #{w.id.toString().slice(-4)}</p>
+                                            <h3 className="text-2xl font-black text-admin-text uppercase tracking-tight leading-none mb-4">{w.name}</h3>
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-[10px] font-black text-admin-accent uppercase tracking-widest bg-admin-accent/10 px-3 py-1.5 rounded-lg border border-admin-accent/20">
+                                                    {w.type}
+                                                </span>
+                                                <span className="text-sm font-black font-mono text-admin-text-muted">₹{w.dailyWage}/D</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
+
+            {/* Premium Onboarding Modal */}
+            <Modal
+                isOpen={isFormOpen}
+                onClose={() => setIsFormOpen(false)}
+                title={editingId ? 'Refine Profile' : 'Onboard Specialist'}
+                footer={
+                    <div className="flex gap-4 w-full">
+                        <ModalCancelButton onClick={() => setIsFormOpen(false)} className="flex-1">Discard</ModalCancelButton>
+                        <ModalPrimaryButton form="worker-form" loading={isSubmitting} className="flex-[2]">
+                            {editingId ? 'Commit Update' : 'Initialize Specialist'}
+                        </ModalPrimaryButton>
+                    </div>
+                }
+            >
+                <form id="worker-form" onSubmit={handleFormSubmit} className="space-y-8">
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-2 ml-1">
+                            <Fingerprint className="w-4 h-4 text-admin-accent" />
+                            <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em]">Full Identity</label>
+                        </div>
+                        <input
+                            placeholder="NAME AS PER SYSTEM RECORD..."
+                            className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border text-admin-text font-black uppercase tracking-widest rounded-[2rem] focus:border-admin-accent outline-none shadow-inner transition-all"
+                            value={formData.name}
+                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                            required
+                        />
+                        {duplicateWarnings.length > 0 && (
+                            <div className="p-4 bg-admin-accent/10 text-admin-accent rounded-2xl border-2 border-admin-accent/20 flex items-start gap-3 animate-pulse">
+                                <AlertCircle className="w-5 h-5 mt-0.5" />
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest">Identity Match Found</p>
+                                    <p className="text-[9px] opacity-70 mt-1">Personnel already exists: {duplicateWarnings[0].name}</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 mb-2 ml-1">
+                                <HardHat className="w-4 h-4 text-admin-accent" />
+                                <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em]">Specialization</label>
+                            </div>
+                            <select
+                                className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border text-admin-text font-black uppercase tracking-widest rounded-[2rem] focus:border-admin-accent outline-none appearance-none shadow-inner cursor-pointer"
+                                value={formData.type}
+                                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                            >
+                                <option>Mason</option>
+                                <option>Helper</option>
+                                <option>Carpenter</option>
+                                <option>Painter</option>
+                                <option>Electrician</option>
+                                <option>Plumber</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 mb-2 ml-1">
+                                <IndianRupee className="w-4 h-4 text-admin-accent" />
+                                <label className="text-[10px] font-black text-admin-text-muted uppercase tracking-[0.2em]">Daily Wage</label>
+                            </div>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    placeholder="0"
+                                    className="w-full px-8 py-6 bg-admin-bg-tertiary border-4 border-admin-border text-admin-text font-mono font-black text-2xl rounded-[2rem] focus:border-admin-accent outline-none shadow-inner"
+                                    value={formData.wage}
+                                    onChange={e => setFormData({ ...formData, wage: e.target.value })}
+                                    required
+                                />
+                                <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[10px] font-black text-admin-text-muted opacity-40 tracking-widest">INR</span>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

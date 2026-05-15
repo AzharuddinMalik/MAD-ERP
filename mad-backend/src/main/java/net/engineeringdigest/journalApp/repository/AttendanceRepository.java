@@ -22,4 +22,10 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     List<Attendance> findByDateBetween(LocalDate startDate, LocalDate endDate);
 
     long countByDateAndStatus(LocalDate date, String status);
+
+    // Get all attendance records for a project
+    List<Attendance> findByProjectId(Long projectId);
+
+    // ✅ M1 FIX: Efficient cascade delete without loading all records
+    void deleteByProject_Id(Long projectId);
 }

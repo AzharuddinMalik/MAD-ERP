@@ -12,23 +12,28 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools' // Optional:
 const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
-            retry: 1, // If API fails, retry once before showing error
-            refetchOnWindowFocus: false, // Don't refetch every time user clicks back to the tab
+            retry: (failureCount, error) => {
+                // 🛡️ STOP retry loop if 401, 403, 429, or total failure
+                if (error.response?.status === 401 || error.response?.status === 403 || error.response?.status === 429) {
+                    return false;
+                }
+                return failureCount < 2; // Retry twice for other intermittent errors
+            },
+            retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential Backoff: 1s, 2s, 4s...
+            refetchOnWindowFocus: false, // Don't refetch on tab switch (prevents 429 on toggle)
         },
     },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-        <React.StrictMode>
-            {/* 3. Wrap your App */}
-            <QueryClientProvider client={queryClient}>
-                <ErrorBoundary>
-                    <App />
-                </ErrorBoundary>
-                {/* Optional: Adds a floating flower icon to inspect cache in dev mode */}
-                <ReactQueryDevtools initialIsOpen={false} />
-            </QueryClientProvider>
-        </React.StrictMode>,
-    </React.StrictMode>,
+        {/* 3. Wrap your App */}
+        <QueryClientProvider client={queryClient}>
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
+            {/* Optional: Adds a floating flower icon to inspect cache in dev mode */}
+            <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+    </React.StrictMode>
 )

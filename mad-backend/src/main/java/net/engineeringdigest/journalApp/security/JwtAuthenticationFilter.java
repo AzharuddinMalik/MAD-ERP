@@ -13,7 +13,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
@@ -28,10 +31,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        final String authHeader = request.getHeader("Authorization");
+        String authHeader = request.getHeader("Authorization");
+        String token = null;
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            token = authHeader.substring(7);
+        } else if (request.getParameter("token") != null) {
+            // 🎫 Support for SSE/EventSource which doesn't allow custom headers
+            token = request.getParameter("token");
+        }
+
+        if (token != null) {
             String username = null;
 
             try {
@@ -49,7 +59,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (jwtUtil.validateToken(token, userDetails.getUsername())) {
 
                     // 🔍 DEBUG: Print authorities to console to verify the fix
-                    System.out.println("✅ User: " + username + " | Authorities: " + userDetails.getAuthorities());
+                    log.debug("✅ User: {} | Authorities: {}", username, userDetails.getAuthorities());
 
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,

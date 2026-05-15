@@ -98,9 +98,58 @@ public class NotificationService {
             mailSender.send(message);
 
             System.out.println("✅ HTML lead notification sent to " + ADMIN_EMAIL + " for: " + lead.getName());
+
+            // 📩 2. Send Confirmation to Customer (if email provided)
+            if (lead.getEmail() != null && !lead.getEmail().isEmpty()) {
+                sendCustomerConfirmation(lead);
+            }
         } catch (Exception e) {
             System.err.println("❌ Failed to send lead notification email: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    private void sendCustomerConfirmation(LeadInquiry lead) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setTo(lead.getEmail());
+            helper.setFrom(ADMIN_EMAIL, "Malik Art Decor");
+            helper.setSubject("Thank you for reaching out to Malik Art Decor!");
+
+            String customerHtml = "<!DOCTYPE html>" +
+                "<html lang='en'><head><meta charset='UTF-8'>" +
+                "<style>" +
+                "body{font-family:'Segoe UI',Arial,sans-serif;background:#FDFCFB;margin:0;padding:24px;color:#3D2B1F;}" +
+                ".card{background:#ffffff;border-radius:24px;max-width:560px;margin:0 auto;overflow:hidden;box-shadow:0 12px 40px rgba(61,43,31,0.08);border:1px solid #F0E8E0;}" +
+                ".header{background:#3D2B1F;padding:48px 32px;text-align:center;}" +
+                ".header h1{color:#E8C9B8;font-size:24px;margin:0;letter-spacing:1px;font-weight:300;text-transform:uppercase;}" +
+                ".body{padding:40px 32px;line-height:1.7;}" +
+                ".greeting{font-size:18px;margin-bottom:20px;color:#2D1F18;}" +
+                ".highlight{color:#E07A5F;font-weight:700;}" +
+                ".footer{background:#F9F7F5;padding:24px;text-align:center;font-size:12px;color:#9B8B80;border-top:1px solid #F0E8E0;}" +
+                ".btn{display:inline-block;padding:14px 32px;background:#E07A5F;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;margin-top:24px;}" +
+                "</style></head><body>" +
+                "<div class='card'>" +
+                "  <div class='header'><h1>Malik Art Decor</h1></div>" +
+                "  <div class='body'>" +
+                "    <div class='greeting'>Hello <span class='highlight'>" + lead.getName() + "</span>,</div>" +
+                "    <p>Thank you for your interest in <strong style='color:#3D2B1F;'>Malik Art Decor</strong>. We have received your inquiry regarding <span class='highlight'>" + (lead.getServiceNeeded() != null ? lead.getServiceNeeded() : "our services") + "</span>.</p>" +
+                "    <p>Our design experts are currently reviewing your request. You can expect a consultation call from us within the next <strong style='color:#3D2B1F;'>30 minutes</strong> to discuss your project in detail.</p>" +
+                "    <p>In the meantime, feel free to browse our latest portfolio on our website.</p>" +
+                "    <a href='https://malikartdecor.com' class='btn'>Explore Portfolio</a>" +
+                "    <p style='margin-top:32px;font-size:14px;opacity:0.8;'>Warm regards,<br>Team Malik Art Decor</p>" +
+                "  </div>" +
+                "  <div class='footer'>&copy; 2024 Malik Art Decor. All rights reserved.<br>Premium P.O.P & Gypsum Solutions</div>" +
+                "</div>" +
+                "</body></html>";
+
+            helper.setText(customerHtml, true);
+            mailSender.send(message);
+            System.out.println("✅ Customer confirmation email sent to: " + lead.getEmail());
+        } catch (Exception e) {
+            System.err.println("❌ Failed to send customer confirmation: " + e.getMessage());
         }
     }
 }

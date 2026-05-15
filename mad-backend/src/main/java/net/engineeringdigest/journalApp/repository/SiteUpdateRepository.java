@@ -10,4 +10,7 @@ import java.util.List;
 public interface SiteUpdateRepository extends JpaRepository<SiteUpdate, Integer> {
     // Fetch top 10 recent updates, ordered by time descending
     List<SiteUpdate> findTop10ByOrderByUpdateTimeDesc();
+
+    // ✅ M1 FIX: Efficient cascade delete without loading all records
+    void deleteByProject_Id(Long projectId);
 }

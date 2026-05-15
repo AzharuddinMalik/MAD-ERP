@@ -1,0 +1,4 @@
+-- Initial baseline script
+-- This file exists to mark the current schema (created by Hibernate previously)
+-- as Version 1 in the Flyway history table.
+-- No DDL here because tables already exist.

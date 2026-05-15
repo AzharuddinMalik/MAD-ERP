@@ -21,5 +21,8 @@ public interface LeadInquiryRepository extends JpaRepository<LeadInquiry, Long> 
 
     // Count leads by status
     long countByStatus(String status);
+
+    // Count uncontacted leads older than a specific date (for "Critical Leads" alert)
+    long countByStatusAndSubmittedAtBefore(String status, LocalDateTime date);
 }
 

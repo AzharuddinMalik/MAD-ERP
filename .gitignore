@@ -64,3 +64,13 @@ target/
 build/
 dist/
 node_modules/
+
+# ===== MAD-ERP Specific diagnostic files =====
+mad-backend/*.txt
+mad-backend/*.log
+mad-backend/uploads/
+mad-frontend/output.css
+
+# ===== Test/Utility Scripts (Uncomment if you want to ignore them) =====
+# *.ps1
+# *.sh

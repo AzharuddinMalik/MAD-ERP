@@ -25,8 +25,13 @@ public class CustomUserDetailsService implements UserDetailsService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
-        // 2. Extract Role Name (e.g., "ROLE_ADMIN")
+        // 2. Extract Role Name
         String roleName = user.getRole().getName();
+
+        // 🟢 Ensure the role is prefixed with 'ROLE_' for hasRole() compatibility
+        if (roleName != null && !roleName.startsWith("ROLE_")) {
+            roleName = "ROLE_" + roleName;
+        }
 
         // Safety check: Ensure role exists
         if (roleName == null) {
@@ -34,7 +39,6 @@ public class CustomUserDetailsService implements UserDetailsService {
         }
 
         // 3. Return Standard Spring Security User
-        // This ensures the authorities are exactly what we expect
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPasswordHash(),

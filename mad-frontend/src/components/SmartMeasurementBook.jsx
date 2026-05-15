@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Share2, RefreshCw, Eye, Calculator, MapPin, Building2, Calendar, FileText } from 'lucide-react';
+import { ArrowLeft, Share2, RefreshCw, Eye, Calculator, MapPin, Building2, Calendar, FileText, BookOpen } from 'lucide-react';
 import api from '../api/axiosConfig';
 import BOQTable from './BOQTable';
-import toast from 'react-hot-toast';
+import { useToast } from './ui/Toast';
+import PageHeader from './ui/PageHeader';
+import { SkeletonTable } from './ui/Skeleton';
 
 const SmartMeasurementBook = () => {
     const { projectId } = useParams();
     const id = projectId;
     const location = useLocation();
     const navigate = useNavigate();
+    const { showToast } = useToast();
 
     // State
     const [project, setProject] = useState(location.state || null);
@@ -26,7 +29,6 @@ const SmartMeasurementBook = () => {
             const response = await api.get(`/measurements/project/${id}`);
             setBoqItems(response.data);
 
-            // Best-effort project details extraction if not passed via state
             if (!project && response.data && response.data.length > 0 && response.data[0].project) {
                 const p = response.data[0].project;
                 setProject({
@@ -37,9 +39,10 @@ const SmartMeasurementBook = () => {
             }
             setError(null);
         } catch (err) {
+            if (err.name === 'CanceledError') return;
             console.error("Error fetching BOQ:", err);
             setError("Failed to load work items.");
-            toast.error("Could not load BOQ data.");
+            showToast('error', "Could not load BOQ data.");
         } finally {
             setLoading(false);
         }
@@ -51,12 +54,12 @@ const SmartMeasurementBook = () => {
 
     const handleRefresh = () => {
         setRefreshTrigger(prev => prev + 1);
-        toast.success("Refreshing data...");
+        showToast('info', "Refreshing site measurements...");
     };
 
     const handleShare = () => {
         navigator.clipboard.writeText(window.location.href);
-        toast.success("Link copied to clipboard!");
+        showToast('success', "Audit Link Copied", { description: "Link copied to clipboard for site sharing." });
     };
 
     // Calculate Totals
@@ -66,114 +69,98 @@ const SmartMeasurementBook = () => {
     const progressPercentage = totalAmount > 0 ? (completedAmount / totalAmount) * 100 : 0;
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
-            {/* Header */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => navigate(-1)}
-                                className="p-2 -ml-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                            >
-                                <ArrowLeft className="w-6 h-6" />
-                            </button>
-                            <div>
-                                <h1 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-2">
-                                    {project?.projectName || 'Project Measurement Book'}
-                                    {clientView && <span className="bg-brand-100 text-brand-700 text-xs px-2 py-0.5 rounded-full border border-brand-200">Client View</span>}
-                                </h1>
-                                <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
-                                    <MapPin className="w-3 h-3 text-slate-400" />
-                                    {project?.location || 'Loading location...'}
-                                    {project?.clientName && (
-                                        <>
-                                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                            <Building2 className="w-3 h-3 text-slate-400" />
-                                            {project.clientName}
-                                        </>
-                                    )}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 w-full md:w-auto">
-                            <button
-                                onClick={() => setClientView(!clientView)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border transition-all ${clientView ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                            >
-                                <Eye className="w-4 h-4" />
-                                <span className="hidden sm:inline">{clientView ? 'Exit Client View' : 'Client View'}</span>
-                            </button>
-                            <button
-                                onClick={handleShare}
-                                className="p-2 sm:px-4 sm:py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-brand-600 transition-colors font-medium text-sm flex items-center gap-2"
-                            >
-                                <Share2 className="w-4 h-4" />
-                                <span className="hidden sm:inline">Share</span>
-                            </button>
-                            <button
-                                onClick={handleRefresh}
-                                className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-xl transition-colors"
-                                title="Refresh Data"
-                            >
-                                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                            </button>
-                        </div>
+        <div className="font-admin text-admin-text space-y-12 max-w-4xl mx-auto px-4 md:px-0 mb-24 relative animate-fade-in">
+            {/* Editorial Header */}
+            <div className="flex justify-between items-end mb-16 pt-8">
+                <div className="space-y-3">
+                    <h1 className="text-editorial-title">Site Ledger</h1>
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-admin-accent animate-pulse" />
+                        <p className="text-[10px] font-black text-admin-accent uppercase tracking-[0.4em]">{project?.projectName || 'Syncing Metadata...'}</p>
                     </div>
                 </div>
-            </header>
+                <div className="flex gap-3">
+                    <button onClick={handleRefresh} className="p-4 bg-admin-bg-tertiary text-admin-text-muted hover:text-admin-accent rounded-full transition-all hover:scale-110 active:scale-95 shadow-premium">
+                        <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin text-admin-accent' : ''}`} />
+                    </button>
+                    <button onClick={() => navigate(-1)} className="p-4 bg-admin-bg-tertiary text-admin-text-muted hover:text-admin-accent rounded-full transition-all hover:scale-110 active:scale-95 shadow-premium">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
 
-            {/* Main Content */}
-            <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            {/* Tactical Switcher */}
+            <div className="flex p-2 bg-admin-bg-tertiary rounded-[2rem] border-2 border-admin-border shadow-inner">
+                <button
+                    onClick={() => setClientView(false)}
+                    className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all ${!clientView ? 'bg-admin-accent text-white shadow-premium' : 'text-admin-text-muted hover:text-admin-text'}`}
+                >
+                    Supervisor Audit
+                </button>
+                <button
+                    onClick={() => setClientView(true)}
+                    className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all ${clientView ? 'bg-admin-accent text-white shadow-premium' : 'text-admin-text-muted hover:text-admin-text'}`}
+                >
+                    Client Report
+                </button>
+            </div>
 
-                {/* Overview Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-brand-200 relative overflow-hidden">
-                        <div className="relative z-10">
-                            <p className="text-brand-100 text-xs font-bold uppercase tracking-wider mb-1">Total Project Value</p>
-                            <h2 className="text-3xl font-bold mb-2">₹{totalAmount.toLocaleString()}</h2>
-                            <div className="flex items-center gap-2 text-brand-100 text-sm">
-                                <FileText className="w-4 h-4" />
-                                <span>{totalItems} Items Listed</span>
-                            </div>
+            {/* Premium Overview Matrix */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="admin-card border-l-8 border-l-admin-accent p-8 bg-admin-accent/5 group">
+                    <div className="flex justify-between items-start mb-12">
+                        <div className="p-4 bg-admin-accent text-white rounded-2xl shadow-premium group-hover:scale-110 transition-transform">
+                            <Calculator className="w-8 h-8" />
                         </div>
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <Calculator className="w-24 h-24" />
+                        <div className="text-right">
+                            <p className="text-[10px] font-black text-admin-accent uppercase tracking-widest mb-1">Contract Value</p>
+                            <h2 className="text-4xl font-black text-admin-text tracking-tighter">₹{totalAmount.toLocaleString()}</h2>
                         </div>
                     </div>
-
-                    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-brand-200 transition-colors">
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Work Completed</p>
-                                <h2 className="text-3xl font-bold text-emerald-600">₹{completedAmount.toLocaleString()}</h2>
-                            </div>
-                            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-                                <Building2 className="w-5 h-5 text-emerald-600" />
-                            </div>
+                    <div className="flex justify-between items-end">
+                        <div className="space-y-1">
+                            <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-[0.2em]">Executed Scope</p>
+                            <p className="text-lg font-black text-admin-success">₹{completedAmount.toLocaleString()}</p>
                         </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden mb-2">
-                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-1000" style={{ width: `${progressPercentage}%` }}></div>
+                        <div className="text-right">
+                            <span className="text-3xl font-black text-admin-accent">{Math.round(progressPercentage)}%</span>
                         </div>
-                        <p className="text-xs text-slate-500 font-medium">{Math.round(progressPercentage)}% of total scope executed</p>
                     </div>
-
-                    <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center group hover:border-brand-200 transition-colors">
-                        <div className="w-12 h-12 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <Calendar className="w-6 h-6" />
-                        </div>
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Last Updated</p>
-                        <p className="text-slate-800 font-bold">
-                            {boqItems.length > 0 ? new Date().toLocaleDateString() : 'No Data'}
-                        </p>
+                    <div className="w-full bg-admin-bg-tertiary rounded-full h-3 mt-6 border-2 border-admin-border overflow-hidden shadow-inner">
+                        <div className="bg-admin-accent h-full transition-all duration-1000 shadow-premium" style={{ width: `${progressPercentage}%` }} />
                     </div>
                 </div>
 
-                {/* BOQ Table Section */}
+                <div className="admin-card p-8 flex flex-col justify-between border-b-8 border-b-admin-text/5">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-admin-bg-tertiary rounded-2xl flex items-center justify-center text-admin-text-muted border-2 border-admin-border shadow-inner">
+                            <MapPin className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-admin-text-muted uppercase tracking-widest">Site Coordinates</p>
+                            <h4 className="text-lg font-black text-admin-text uppercase tracking-tight">{project?.location || 'FIELD SITE'}</h4>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 grid grid-cols-2 gap-4">
+                        <div className="p-4 bg-admin-bg-tertiary rounded-2xl border-2 border-admin-border shadow-inner">
+                            <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-widest mb-1">Items</p>
+                            <p className="text-xl font-black text-admin-text">{totalItems}</p>
+                        </div>
+                        <div className="p-4 bg-admin-bg-tertiary rounded-2xl border-2 border-admin-border shadow-inner">
+                            <p className="text-[8px] font-black text-admin-text-muted uppercase tracking-widest mb-1">Status</p>
+                            <p className="text-xl font-black text-admin-success">LIVE</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Work Content */}
+            <div className="space-y-8">
                 {error ? (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-600">
-                        <p className="font-bold">{error}</p>
+                    <div className="admin-card border-admin-danger/20 p-12 text-center space-y-4">
+                        <AlertCircle className="w-12 h-12 text-admin-danger mx-auto opacity-40" />
+                        <p className="text-xs font-black uppercase tracking-widest text-admin-danger">{error}</p>
                     </div>
                 ) : (
                     <BOQTable
@@ -184,7 +171,7 @@ const SmartMeasurementBook = () => {
                         loading={loading}
                     />
                 )}
-            </main>
+            </div>
         </div>
     );
 };

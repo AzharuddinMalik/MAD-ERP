@@ -1,6 +1,9 @@
 package net.engineeringdigest.journalApp.controller.api;
 
+import net.engineeringdigest.journalApp.dto.DashboardResponseDTO;
 import net.engineeringdigest.journalApp.dto.auth.ProjectDTO;
+import net.engineeringdigest.journalApp.exception.ResourceNotFoundException;
+import net.engineeringdigest.journalApp.model.*;
 import net.engineeringdigest.journalApp.model.Project;
 import net.engineeringdigest.journalApp.model.SiteUpdate;
 import net.engineeringdigest.journalApp.model.User;
@@ -10,13 +13,17 @@ import net.engineeringdigest.journalApp.repository.BillOfQuantityRepository;
 import net.engineeringdigest.journalApp.repository.CityRepository;
 import net.engineeringdigest.journalApp.repository.LabourRepository;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
+import net.engineeringdigest.journalApp.repository.ProjectInvoiceRepository;
 import net.engineeringdigest.journalApp.repository.SiteUpdateRepository;
 import net.engineeringdigest.journalApp.repository.UserRepository; // ✅ ADDED IMPORT
 import net.engineeringdigest.journalApp.repository.LeadInquiryRepository;
+import net.engineeringdigest.journalApp.model.ProjectInvoice;
 import net.engineeringdigest.journalApp.service.ProjectService;
+import net.engineeringdigest.journalApp.service.ProjectMigrationService; // ✅ ADDED
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -32,8 +39,8 @@ import java.util.stream.Collectors;
 import org.springframework.transaction.annotation.Transactional; // Import Transactional
 
 @RestController
-@RequestMapping("/api/admin")
-@PreAuthorize("hasRole('ADMIN')")
+@RequestMapping("/api/v1/admin")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
 public class AdminController {
 
     @Autowired
@@ -43,13 +50,10 @@ public class AdminController {
     private ProjectService projectService;
 
     @Autowired
+    private ProjectMigrationService migrationService; // ✅ ADDED
+
+    @Autowired
     private UserRepository userRepository;
-
-    // @Autowired
-    // private ProjectRepository projectRepository;
-
-    // @Autowired
-    // private SiteUpdateRepository siteUpdateRepository;
 
     // ✅ ADD THESE REPOSITORIES
     @Autowired
@@ -63,6 +67,13 @@ public class AdminController {
 
     @Autowired
     private LeadInquiryRepository leadInquiryRepository;
+
+    @Autowired
+    private ProjectInvoiceRepository invoiceRepository;
+
+    @Autowired
+    private net.engineeringdigest.journalApp.repository.AuditLogRepository auditLogRepository;
+
     private final ProjectRepository projectRepository;
     private final SiteUpdateRepository siteUpdateRepository;
 
@@ -72,11 +83,8 @@ public class AdminController {
         this.siteUpdateRepository = siteUpdateRepository;
     }
 
-    // ✅ NEW ENDPOINT: Get All Projects for the Live View
-    @GetMapping("/projects")
-    public ResponseEntity<?> getAllProjects() {
-        return ResponseEntity.ok(projectRepository.findAll());
-    }
+    // 🟢 Project list/creation logic has been moved to ProjectController (/api/v1/projects)
+    // to enforce strict DTO validation and pagination.
 
     // ✅ NEW ENDPOINT: Get Single Project (for Edit/Audit)
     @GetMapping("/projects/{id}")
@@ -86,7 +94,8 @@ public class AdminController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ✅ NEW ENDPOINT: Add City
+    // ✅ NEW ENDPOINT: Add City (Admin Only)
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/cities")
     public ResponseEntity<?> addCity(@RequestBody net.engineeringdigest.journalApp.model.City city) {
         try {
@@ -110,26 +119,39 @@ public class AdminController {
     public List<User> getAllSupervisors() {
         // Now 'userRepository' is defined and will work
         List<User> supervisors = userRepository.findAll().stream()
-                .filter(u -> u.getRole() != null && "ROLE_SUPERVISOR".equals(u.getRole().getName()))
+                .filter(u -> u.getRole() != null && 
+                    (u.getRole().getName().endsWith("SUPERVISOR")))
                 .collect(Collectors.toList());
 
-        // Calculate Project Count for each
-        // Optimally we would do this with a custom query countBySupervisorId but let's
-        // do in-memory for small scale
-        List<Project> activeProjects = projectRepository.findAll().stream()
-                .filter(p -> p.getStatus() == net.engineeringdigest.journalApp.model.ProjectStatus.RUNNING)
-                .collect(Collectors.toList());
-
+        // ✅ M2 FIX: Use targeted count query instead of loading all projects into memory
         for (User info : supervisors) {
-            long count = activeProjects.stream()
-                    .filter(p -> p.getSupervisor() != null && p.getSupervisor().getId().equals(info.getId()))
-                    .count();
+            long count = projectRepository.countBySupervisor_IdAndStatus(
+                    info.getId(), ProjectStatus.RUNNING);
             info.setProjectCount(count);
         }
 
         return supervisors;
     }
 
+    /**
+     * 🚜 SECURE ENDPOINT: Trigger Legacy Migration
+     * Strictly Admin-only. Migrates data from 'cms' to 'madcms' with fail-safes.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/migrate-legacy-data")
+    public ResponseEntity<String> migrateLegacyData() {
+        try {
+            String result = migrationService.migrateProjects();
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Migration failed: " + e.getMessage());
+        }
+    }
+
+    @Autowired
+    private net.engineeringdigest.journalApp.service.FileStorageService fileStorageService;
+
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/post-update")
     public ResponseEntity<?> postSiteUpdate(
             @RequestParam("projectId") Long projectId,
@@ -142,13 +164,9 @@ public class AdminController {
             update.setProject(project);
             update.setContent(content);
             update.setUpdateTime(LocalDateTime.now());
+            // ✅ H5 FIX: Use shared FileStorageService (external configurable path)
             if (file != null && !file.isEmpty()) {
-                String projectDir = System.getProperty("user.dir");
-                Path uploadPath = Paths.get(projectDir, "src", "main", "resources", "static", "uploads");
-                if (!Files.exists(uploadPath))
-                    Files.createDirectories(uploadPath);
-                String filename = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-                file.transferTo(uploadPath.resolve(filename).toFile());
+                String filename = fileStorageService.saveFile(file);
                 update.setPhotoUrl1("/uploads/" + filename);
             }
             siteUpdateRepository.save(update);
@@ -158,6 +176,7 @@ public class AdminController {
         }
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/update-project")
     public ResponseEntity<?> updateProjectStatus(@RequestBody Project projectUpdate) {
         Project existing = projectRepository.findById((projectUpdate.getId()))
@@ -170,197 +189,105 @@ public class AdminController {
         return ResponseEntity.ok().body("{\"message\": \"Project updated\"}");
     }
 
-    @PostMapping("/create-project")
-    public ResponseEntity<?> createProject(@RequestBody ProjectDTO dto) {
-        try {
-            net.engineeringdigest.journalApp.model.City city = cityRepository.findById(dto.getCityId())
-                    .orElseThrow(() -> new RuntimeException("City not found"));
-            Project project = new Project();
-            project.setName(dto.getName());
-            project.setClientName(dto.getClientName());
-            project.setStartDate(dto.getStartDate());
-            project.setCity(city);
+    // 🟢 createProject logic has been moved to ProjectController (/api/v1/projects)
+    // for strict Type Alignment and JSR 380 Validation.
 
-            // 🟢 Address Mappings
-            project.setLocation(dto.getLocation()); // Using 'location' as generic or street address
-            project.setPlotNo(dto.getPlotNo());
-            project.setColony(dto.getColony());
-            project.setPincode(dto.getPincode());
-            project.setDistrict(dto.getDistrict());
-            project.setState(dto.getState());
-
-            // 🟢 Specs Mappings
-            project.setProjectType(dto.getProjectType());
-            project.setSquareFeet(dto.getSquareFeet());
-            project.setBudget(dto.getBudget());
-
-            // 🟢 Compliance Mappings
-            project.setReraNumber(dto.getReraNumber());
-            project.setFireNocNumber(dto.getFireNocNumber());
-
-            project.setStatus(net.engineeringdigest.journalApp.model.ProjectStatus.RUNNING);
-            project.setLabourCount(0);
-
-            // Assign Supervisor if provided
-            if (dto.getSupervisorId() != null) {
-                User supervisor = userRepository.findById(dto.getSupervisorId())
-                        .orElseThrow(() -> new RuntimeException("Supervisor not found"));
-                project.setSupervisor(supervisor);
-            }
-
-            projectRepository.save(project);
-            return ResponseEntity.ok(project);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
-    }
-
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @GetMapping("/dashboard")
-    public ResponseEntity<?> getDashboard() {
-        try {
-            Map<String, Object> dashboardData = new HashMap<>();
-            dashboardData.put("globalStats", projectService.getGlobalStats());
-            dashboardData.put("cityStats", projectService.getProjectStats());
-            dashboardData.put("alerts", projectService.getDashboardAlerts());
-            dashboardData.put("recentUpdates", projectService.getRecentUpdates());
-            return ResponseEntity.ok(dashboardData);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
-        }
+    public ResponseEntity<DashboardResponseDTO> getDashboard() {
+        return ResponseEntity.ok(projectService.getDashboardData());
     }
 
     // ✅ UPDATED DELETE METHOD WITH CASCADE LOGIC
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/projects/{id}")
     @Transactional // Ensures all deletes happen or none happen
     public ResponseEntity<?> deleteProject(@PathVariable Long id) {
-        try {
-            Project project = projectRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
+        // ✅ E1: Use ResourceNotFoundException instead of RuntimeException
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", id));
 
-            // 1. Delete Attendance linked to this Project
-            // (Assumes you added a delete method in AttendanceRepository or we iterate)
-            // Ideally: attendanceRepository.deleteByProjectId(id);
-            // For now, let's fetch and delete to be safe if custom query missing
-            attendanceRepository.findAll().stream()
-                    .filter(a -> a.getProject().getId().equals(id))
-                    .forEach(attendanceRepository::delete);
+        // ✅ M1 FIX: Use targeted repository delete methods instead of findAll().stream().filter()
+        attendanceRepository.deleteByProject_Id(id);
+        labourRepository.deleteByProject_Id(id);
+        boqRepository.findByProjectId(id).forEach(boqRepository::delete);
+        siteUpdateRepository.deleteByProject_Id(id);
 
-            // 2. Delete Labour linked to this Project
-            // ✅ FIX: Use findAll() stream instead of findByProjectIdAndIsActiveTrue to
-            // ensure INACTIVE workers are also deleted
-            labourRepository.findAll().stream()
-                    .filter(l -> l.getProject().getId().equals(id))
-                    .forEach(labourRepository::delete);
+        projectRepository.delete(project);
 
-            // 3. Delete BOQ Items
-            boqRepository.findByProjectId(id)
-                    .forEach(boqRepository::delete);
-
-            // 4. Delete Site Updates
-            siteUpdateRepository.findAll().stream()
-                    .filter(u -> u.getProject().getId().equals(id))
-                    .forEach(siteUpdateRepository::delete);
-
-            // 5. Finally, Delete the Project
-            projectRepository.delete(project);
-
-            return ResponseEntity.ok().body("{\"message\": \"Project and all related data deleted successfully\"}");
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.badRequest().body("Error deleting project: " + e.getMessage());
-        }
+        return ResponseEntity.ok().body("{\"message\": \"Project and all related data deleted successfully\"}");
     }
 
-    // ✅ NEW: Full Update Endpoint
+    // ✅ M5: Deprecated — use ProjectController (/api/v1/projects/{id}) for all project updates.
+    // This endpoint will be removed in the next major version.
+    @Deprecated(since = "v1.1", forRemoval = true)
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/projects/{id}")
     public ResponseEntity<?> updateProject(@PathVariable Long id, @RequestBody ProjectDTO projectDTO) {
+        Project existing = projectRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", id));
+
+        existing.setName(projectDTO.getName());
+        existing.setClientName(projectDTO.getClientName());
+        existing.setStartDate(projectDTO.getStartDate());
+        existing.setLocation(projectDTO.getLocation());
+
+        if (projectDTO.getCityId() != null) {
+            net.engineeringdigest.journalApp.model.City city = cityRepository.findById(projectDTO.getCityId())
+                    .orElseThrow(() -> new ResourceNotFoundException("City", projectDTO.getCityId()));
+            existing.setCity(city);
+        }
+
+        if (projectDTO.getSupervisorId() != null) {
+            User supervisor = userRepository.findById(projectDTO.getSupervisorId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Supervisor", projectDTO.getSupervisorId()));
+            existing.setSupervisor(supervisor);
+        } else {
+            existing.setSupervisor(null);
+        }
+
+        if (projectDTO.getStatus() != null) {
+            existing.setStatus(projectDTO.getStatus());
+        }
+
+        projectRepository.save(existing);
+        return ResponseEntity.ok(existing);
+    }
+
+    /**
+     * 🟢 Endpoints: POST /api/admin/projects/{id}/finalize
+     * Marks project as INVOICED and generates a financial record.
+     */
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
+    @PostMapping("/projects/{id}/finalize")
+    public ResponseEntity<?> finalizeProject(
+            @PathVariable Long id,
+            Authentication authentication) {
+        
         try {
-            Project existing = projectRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
-
-            // Update basic fields
-            // Update basic fields
-            existing.setName(projectDTO.getName());
-            existing.setClientName(projectDTO.getClientName());
-            existing.setStartDate(projectDTO.getStartDate());
-
-            // 🟢 Update Address
-            existing.setLocation(projectDTO.getLocation());
-            if (projectDTO.getPlotNo() != null)
-                existing.setPlotNo(projectDTO.getPlotNo());
-            if (projectDTO.getColony() != null)
-                existing.setColony(projectDTO.getColony());
-            if (projectDTO.getPincode() != null)
-                existing.setPincode(projectDTO.getPincode());
-            if (projectDTO.getDistrict() != null)
-                existing.setDistrict(projectDTO.getDistrict());
-            if (projectDTO.getState() != null)
-                existing.setState(projectDTO.getState());
-
-            // 🟢 Update Specs
-            if (projectDTO.getProjectType() != null)
-                existing.setProjectType(projectDTO.getProjectType());
-            if (projectDTO.getSquareFeet() != null)
-                existing.setSquareFeet(projectDTO.getSquareFeet());
-            if (projectDTO.getBudget() != null)
-                existing.setBudget(projectDTO.getBudget());
-
-            // 🟢 Update Compliance
-            if (projectDTO.getReraNumber() != null)
-                existing.setReraNumber(projectDTO.getReraNumber());
-            if (projectDTO.getFireNocNumber() != null)
-                existing.setFireNocNumber(projectDTO.getFireNocNumber());
-
-            // Update City if changed
-            if (projectDTO.getCityId() != null) {
-                net.engineeringdigest.journalApp.model.City city = cityRepository.findById(projectDTO.getCityId())
-                        .orElseThrow(() -> new RuntimeException("City not found"));
-                existing.setCity(city);
-            }
-
-            // Update Supervisor if changed
-            if (projectDTO.getSupervisorId() != null) {
-                User supervisor = userRepository.findById(projectDTO.getSupervisorId())
-                        .orElseThrow(() -> new RuntimeException("Supervisor not found"));
-                existing.setSupervisor(supervisor);
-            } else {
-                existing.setSupervisor(null); // Allow clearing supervisor
-            }
-
-            // Note: Status is updated via a separate flow usually, but if DTO has it, we
-            // could.
-            // However, ProjectDTO doesn't usually carry status for creation.
-            // Let's check if the USER want status editable here.
-            // The user said: "Modify: Admin changes a field (e.g., Status from "RUNNING" to
-            // "ON_HOLD")"
-            // So we MUST handle status. ProjectDTO might need a status field or we check
-            // the separate endpoint.
-            // Let's look at ProjectDTO again. It DOES NOT have status.
-            // We should probably add Status to ProjectDTO or handle it separately.
-            // User request: "Field Why Edit? ... Status: Crucial."
-            // I will ADD Status to ProjectDTO in the next step, for now I will comment it.
-
-            // ✅ Update Status if provided
-            if (projectDTO.getStatus() != null) {
-                existing.setStatus(projectDTO.getStatus());
-            }
-
-            projectRepository.save(existing);
-            return ResponseEntity.ok(existing);
+            boolean isAdmin = authentication.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            
+            return ResponseEntity.ok(projectService.finalizeProject(id, authentication.getName(), isAdmin));
+        } catch (IllegalStateException e) {
+            // Return 409 Conflict if they hit the report constraint
+            return ResponseEntity.status(409).body("Data Integrity Conflict: " + e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error updating project: " + e.getMessage());
+            return ResponseEntity.badRequest().body("Error finalising project: " + e.getMessage());
         }
     }
 
     // ── LEADS MANAGEMENT ENPOINTS ──
 
     // Get all leads ordered by newest first
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @GetMapping("/leads")
     public ResponseEntity<?> getAllLeads() {
         return ResponseEntity.ok(leadInquiryRepository.findAllByOrderBySubmittedAtDesc());
     }
 
     // Update lead status (e.g. NEW -> CONTACTED -> CLOSED)
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/leads/{id}/status")
     public ResponseEntity<?> updateLeadStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         try {
@@ -379,6 +306,7 @@ public class AdminController {
     }
 
     // Get leads summary stats for the dashboard widget
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISOR')")
     @GetMapping("/leads/stats")
     public ResponseEntity<?> getLeadsStats() {
         try {
@@ -391,16 +319,28 @@ public class AdminController {
             long totalClosed = leadInquiryRepository.countByStatus("CLOSED");
             long totalAll = leadInquiryRepository.count();
 
+            // Critical leads: Status is NEW and older than 24 hours
+            LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+            long criticalCount = leadInquiryRepository.countByStatusAndSubmittedAtBefore("NEW", twentyFourHoursAgo);
+
             Map<String, Object> stats = new HashMap<>();
             stats.put("todayCount", todayCount);
             stats.put("totalNew", totalNew);
             stats.put("totalContacted", totalContacted);
             stats.put("totalClosed", totalClosed);
             stats.put("totalAll", totalAll);
+            stats.put("criticalCount", criticalCount);
 
             return ResponseEntity.ok(stats);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error fetching lead stats: " + e.getMessage());
         }
+    }
+
+    // Get all system audit logs (Admin Only)
+    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/audit-logs")
+    public ResponseEntity<?> getAuditLogs() {
+        return ResponseEntity.ok(auditLogRepository.findAllByOrderByTimestampDesc());
     }
 }

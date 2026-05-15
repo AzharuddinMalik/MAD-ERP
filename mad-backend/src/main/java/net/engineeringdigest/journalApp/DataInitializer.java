@@ -6,12 +6,15 @@ import net.engineeringdigest.journalApp.repository.RoleRepository;
 import net.engineeringdigest.journalApp.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
+// ✅ C2 FIX: Only seeds default admin in 'dev' profile. Production won't get admin/admin123.
 @Component
+@Profile("dev")
 public class DataInitializer implements CommandLineRunner {
 
     @Autowired

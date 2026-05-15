@@ -1,53 +1,53 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectService } from '../services/projectService';
-import api from '../api/axiosConfig'; // Needed for supervisors
-import { toast } from 'react-hot-toast'; // Replaces alert()
+import api from '../api/axiosConfig';
 
 export const useProjects = () => {
     const queryClient = useQueryClient();
 
-    // 1. Query: Fetch Projects (Auto-caches & Handles Loading)
+    // 1. Query: Fetch Projects
     const projectsQuery = useQuery({
         queryKey: ['projects'],
         queryFn: projectService.getAll,
-        staleTime: 1000 * 60 * 5, // Data stays fresh for 5 mins
+        staleTime: 1000 * 60 * 5,
     });
 
     // 2. Query: Fetch Cities
     const citiesQuery = useQuery({
         queryKey: ['cities'],
         queryFn: projectService.getCities,
-        staleTime: Infinity, // Cities rarely change, fetch once
+        staleTime: 1000 * 60 * 5, // Reduce from Infinity to 5 mins
     });
 
-    // 2.5 Query: Fetch Supervisors
+    // 2.5 Query: Fetch Supervisors (Only for Admins)
+    const userRole = localStorage.getItem('role');
+    const isAdmin = userRole === 'ROLE_ADMIN';
+
     const supervisorsQuery = useQuery({
         queryKey: ['supervisors'],
         queryFn: async () => {
-            const { data } = await api.get('/admin/supervisors'); // Direct call or move to service
+            if (!isAdmin) return [];
+            const { data } = await api.get('/admin/supervisors');
             return data;
         },
+        enabled: isAdmin,
         staleTime: 1000 * 60 * 5,
     });
 
-    // 3. Mutation: Delete Project (Auto-refreshes list on success)
+    // 3. Mutation: Delete Project (using mutateAsync for true verification)
     const deleteMutation = useMutation({
         mutationFn: projectService.delete,
         onSuccess: () => {
-            toast.success("Project deleted successfully");
-            queryClient.invalidateQueries(['projects']); // Refetches list automatically!
-        },
-        onError: () => toast.error("Failed to delete project")
+            queryClient.invalidateQueries(['projects']);
+        }
     });
 
     // 4. Mutation: Update Project
     const updateMutation = useMutation({
         mutationFn: ({ id, data }) => projectService.update(id, data),
         onSuccess: () => {
-            toast.success("Project updated successfully");
             queryClient.invalidateQueries(['projects']);
-        },
-        onError: () => toast.error("Failed to update project")
+        }
     });
 
     return {
@@ -56,8 +56,8 @@ export const useProjects = () => {
         supervisors: supervisorsQuery.data || [],
         isLoading: projectsQuery.isLoading || citiesQuery.isLoading,
         error: projectsQuery.error,
-        deleteProject: deleteMutation.mutate,
-        updateProject: updateMutation.mutate,
+        deleteProject: deleteMutation.mutateAsync,
+        updateProject: updateMutation.mutateAsync,
         isDeleting: deleteMutation.isPending,
         isUpdating: updateMutation.isPending
     };

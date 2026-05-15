@@ -4,18 +4,25 @@ import net.engineeringdigest.journalApp.model.Project;
 import net.engineeringdigest.journalApp.model.SiteUpdate;
 import net.engineeringdigest.journalApp.repository.ProjectRepository;
 import net.engineeringdigest.journalApp.repository.SiteUpdateRepository;
+import net.engineeringdigest.journalApp.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import net.engineeringdigest.journalApp.service.LiveUpdateService;
+import net.engineeringdigest.journalApp.service.ProjectService;
+
 import java.time.LocalDateTime;
 
+import lombok.extern.slf4j.Slf4j;
+
 @RestController
-@RequestMapping("/api/supervisor")
+@RequestMapping("/api/v1/supervisor")
 // Allow both Supervisors (to work) and Admins (to debug)
-@PreAuthorize("hasRole('SUPERVISOR')") // ✅ Secure the WHOLE Class
+@PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN')") // ✅ Allow both roles
+@Slf4j
 public class SupervisorController {
 
     @Autowired
@@ -24,6 +31,13 @@ public class SupervisorController {
     @Autowired
     private SiteUpdateRepository siteUpdateRepository;
 
+    @Autowired
+    private LiveUpdateService notificationService;
+
+    @Autowired
+    private ProjectService projectService;
+
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN')")
     @GetMapping("/my-projects")
     public ResponseEntity<?> getMyProjects() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -34,30 +48,24 @@ public class SupervisorController {
      * 🟢 NEW: Weekly Update Endpoint
      * Allows a supervisor to report progress on THEIR assigned project.
      */
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN')")
     @PostMapping("/weekly-update")
     public ResponseEntity<?> postWeeklyUpdate(
             @RequestBody net.engineeringdigest.journalApp.dto.auth.WeeklyUpdateDTO updateDTO) {
-        try {
-            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
 
-            // Debugging: Print who is trying to access
-            System.out
-                    .println("User: " + username + " is attempting update on Project ID: " + updateDTO.getProjectId());
-            System.out
-                    .println("Authorities: " + SecurityContextHolder.getContext().getAuthentication().getAuthorities());
+        // 1. Fetch Project
+        Project project = projectRepository.findById(updateDTO.getProjectId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project", updateDTO.getProjectId()));
 
-            // 1. Fetch Project
-            Project project = projectRepository.findById(updateDTO.getProjectId())
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
-
-            // 2. SECURITY CHECK
-            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication()
-                    .getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ADMIN"));
+        // ✅ H2 FIX: Spring Security prefixes roles with "ROLE_". Was "ADMIN" (never matched).
+        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
             // Check if user owns the project (Supervisor must match)
             if (!isAdmin) {
                 if (project.getSupervisor() == null || !project.getSupervisor().getUsername().equals(username)) {
-                    return ResponseEntity.status(403).body("You are not authorized to update this project.");
+                    throw new org.springframework.security.access.AccessDeniedException("You are not authorized to update this project.");
                 }
             }
 
@@ -77,20 +85,18 @@ public class SupervisorController {
             update.setContent(
                     "Weekly Report: " + updateDTO.getLabourCount() + " avg workers. Notes: " + updateDTO.getRemark());
             update.setUpdateTime(LocalDateTime.now());
-            siteUpdateRepository.save(update);
+            SiteUpdate savedUpdate = siteUpdateRepository.save(update);
+            
+            // 📡 Broadcast for Real-time Dashboard
+            notificationService.broadcastSiteUpdate(projectService.mapToSiteUpdateDTO(savedUpdate));
 
             return ResponseEntity.ok("Weekly update recorded successfully.");
-
-        } catch (Exception e) {
-            e.printStackTrace(); // Look at console if this fails
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
     }
 
     @Autowired
     private net.engineeringdigest.journalApp.service.FileStorageService fileStorageService;
 
-    @PreAuthorize("hasRole('SUPERVISOR')")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN')")
     @PostMapping("/daily-update")
     public ResponseEntity<?> dailyProjectUpdate(
             @RequestParam("projectId") Long projectId,
@@ -99,9 +105,8 @@ public class SupervisorController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "photo1", required = false) org.springframework.web.multipart.MultipartFile photo1,
             @RequestParam(value = "photo2", required = false) org.springframework.web.multipart.MultipartFile photo2) {
-        try {
             Project project = projectRepository.findById(projectId)
-                    .orElseThrow(() -> new RuntimeException("Project not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Project", projectId));
             project.setLabourCount(labourCount);
             
             // Update Status if provided
@@ -110,7 +115,7 @@ public class SupervisorController {
                     project.setStatus(net.engineeringdigest.journalApp.model.ProjectStatus.valueOf(status));
                 } catch (IllegalArgumentException e) {
                    // Ignore invalid status for now, or log it
-                   System.out.println("Invalid status received: " + status);
+                   log.warn("Invalid status received: {}", status);
                 }
             } else if (labourCount > 0
                     && project.getStatus() == net.engineeringdigest.journalApp.model.ProjectStatus.ON_HOLD) {
@@ -125,19 +130,24 @@ public class SupervisorController {
             update.setUpdateTime(LocalDateTime.now());
 
             // Handle File Uploads
-            if (photo1 != null && !photo1.isEmpty()) {
-                String url1 = fileStorageService.saveFile(photo1);
-                update.setPhotoUrl1(url1);
-            }
-            if (photo2 != null && !photo2.isEmpty()) {
-                String url2 = fileStorageService.saveFile(photo2);
-                update.setPhotoUrl2(url2);
+            try {
+                if (photo1 != null && !photo1.isEmpty()) {
+                    String url1 = fileStorageService.saveFile(photo1);
+                    update.setPhotoUrl1(url1);
+                }
+                if (photo2 != null && !photo2.isEmpty()) {
+                    String url2 = fileStorageService.saveFile(photo2);
+                    update.setPhotoUrl2(url2);
+                }
+            } catch (java.io.IOException e) {
+                log.error("Failed to save photo", e);
+                throw new net.engineeringdigest.journalApp.exception.BusinessRuleException("ERR_FILE_UPLOAD", "Failed to upload photo: " + e.getMessage());
             }
 
-            siteUpdateRepository.save(update);
+            SiteUpdate savedUpdate = siteUpdateRepository.save(update);
+
+            // 📡 Broadcast for Real-time Dashboard
+            notificationService.broadcastSiteUpdate(projectService.mapToSiteUpdateDTO(savedUpdate));
             return ResponseEntity.ok("Daily update recorded with photos.");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
-        }
     }
 }
