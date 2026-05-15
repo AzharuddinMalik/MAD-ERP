@@ -513,7 +513,7 @@ public class ProjectService {
         return ProductivityDTO.builder()
                 .projectId(projectId)
                 .projectName(project.getName())
-                .supervisorName(project.getSupervisor() != null ? project.getSupervisor().getUserName() : "Unassigned")
+                .supervisorName(project.getSupervisor() != null ? project.getSupervisor().getUsername() : "Unassigned")
                 .totalManDays((long) totalManDays)
                 .valueProducedPerManDay(valuePerManDay)
                 .materialWastageRatio(BigDecimal.valueOf(wastageRatio))

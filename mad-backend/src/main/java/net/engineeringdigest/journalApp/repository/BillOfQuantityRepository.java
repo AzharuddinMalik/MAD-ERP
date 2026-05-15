@@ -10,4 +10,5 @@ import java.util.List;
 public interface BillOfQuantityRepository extends JpaRepository<BillOfQuantity, Long> {
     // Find all BOQ items for a specific project
     List<BillOfQuantity> findByProjectId(Long projectId);
+    List<BillOfQuantity> findByProject(net.engineeringdigest.journalApp.model.Project project);
 }

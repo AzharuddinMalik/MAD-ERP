@@ -25,6 +25,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     // Get all attendance records for a project
     List<Attendance> findByProjectId(Long projectId);
+    List<Attendance> findByProject(net.engineeringdigest.journalApp.model.Project project);
 
     // ✅ M1 FIX: Efficient cascade delete without loading all records
     void deleteByProject_Id(Long projectId);

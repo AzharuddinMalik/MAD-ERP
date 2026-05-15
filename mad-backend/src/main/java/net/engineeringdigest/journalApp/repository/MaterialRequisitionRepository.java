@@ -11,4 +11,6 @@ public interface MaterialRequisitionRepository extends JpaRepository<MaterialReq
     List<MaterialRequisition> findByRequesterId(Long requesterId);
     List<MaterialRequisition> findByStatus(String status);
     List<MaterialRequisition> findByVendorId(Long vendorId);
+    List<MaterialRequisition> findByProject(net.engineeringdigest.journalApp.model.Project project);
+    List<MaterialRequisition> findByVendor(net.engineeringdigest.journalApp.model.Vendor vendor);
 }
