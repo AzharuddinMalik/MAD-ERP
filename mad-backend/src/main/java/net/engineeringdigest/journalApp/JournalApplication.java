@@ -30,6 +30,14 @@ public class JournalApplication {
             System.out.println("ℹ️ No .env file found in parent directory, skipping manual load.");
         }
 
+        // 🚀 Render Fix: Convert postgres:// to jdbc:postgresql://
+        String dbUrl = System.getenv("DATABASE_URL");
+        if (dbUrl != null && dbUrl.startsWith("postgres://")) {
+            String jdbcUrl = dbUrl.replace("postgres://", "jdbc:postgresql://");
+            System.setProperty("DATABASE_URL", jdbcUrl);
+            System.out.println("✅ Converted Render DATABASE_URL to JDBC format.");
+        }
+
         SpringApplication.run(JournalApplication.class, args);
         // ✅ C5 FIX: Removed BCrypt.encode("admin123") println — was a debug artifact leaking to logs
     }
