@@ -1,4 +1,6 @@
-# MAD-ERP: Enterprise Intelligence & Industrial Elegance 🏗️
+# MAD-ERP: Enterprise Construction Management
+> [!NOTE]
+> **Production Status:** Stable | **Last Deployment Trigger:** 2026-05-16 16:10 IST
 
 Welcome to **MAD-ERP** (Malik Art Decor Enterprise Resource Planning), a high-performance, full-stack ecosystem designed to revolutionize construction project management through **Financial Intelligence** and **Industrial Elegance**.
 
