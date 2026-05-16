@@ -30,8 +30,11 @@ public class JournalApplication {
             System.out.println("ℹ️ No .env file found in parent directory, skipping manual load.");
         }
 
+        System.out.println("🚀 main() started - Profile selection phase.");
+        
         // 🚀 Render Fix: Convert postgres://
         String dbUrl = System.getenv("DATABASE_URL");
+        System.out.println("ℹ️ DATABASE_URL is " + (dbUrl != null ? "PRESENT" : "MISSING"));
         if (dbUrl != null && dbUrl.startsWith("postgres://")) {
             try {
                 // Parse the postgres:// URI
