@@ -30,16 +30,43 @@ public class JournalApplication {
             System.out.println("ℹ️ No .env file found in parent directory, skipping manual load.");
         }
 
-        // 🚀 Render Fix: Convert postgres:// to jdbc:postgresql://
+        // 🚀 Render Fix: Convert postgres://
         String dbUrl = System.getenv("DATABASE_URL");
         if (dbUrl != null && dbUrl.startsWith("postgres://")) {
-            String jdbcUrl = dbUrl.replace("postgres://", "jdbc:postgresql://");
-            System.setProperty("DATABASE_URL", jdbcUrl);
-            System.out.println("✅ Converted Render DATABASE_URL to JDBC format.");
+            try {
+                // Parse the postgres:// URI
+                java.net.URI dbUri = new java.net.URI(dbUrl);
+                String username = dbUri.getUserInfo().split(":")[0];
+                String password = dbUri.getUserInfo().split(":")[1];
+                String dbHost = dbUri.getHost();
+                int dbPort = dbUri.getPort();
+                String dbName = dbUri.getPath();
+
+                // Construct JDBC URL: jdbc:postgresql://host:port/dbname?sslmode=require
+                String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + dbName;
+                if (!jdbcUrl.contains("?")) {
+                    jdbcUrl += "?sslmode=require";
+                } else if (!jdbcUrl.contains("sslmode")) {
+                    jdbcUrl += "&sslmode=require";
+                }
+
+                // Explicitly set Spring properties to override any other config
+                System.setProperty("spring.datasource.url", jdbcUrl);
+                System.setProperty("spring.datasource.username", username);
+                System.setProperty("spring.datasource.password", password);
+                System.setProperty("spring.datasource.driver-class-name", "org.postgresql.Driver");
+
+                System.out.println("✅ Successfully parsed Render DATABASE_URL and configured DataSource.");
+            } catch (Exception e) {
+                System.err.println("❌ Failed to parse DATABASE_URL: " + e.getMessage());
+                // Fallback to simple replacement if parsing fails
+                String jdbcUrl = dbUrl.replace("postgres://", "jdbc:postgresql://");
+                System.setProperty("spring.datasource.url", jdbcUrl);
+            }
         }
 
         SpringApplication.run(JournalApplication.class, args);
-        // ✅ C5 FIX: Removed BCrypt.encode("admin123") println — was a debug artifact leaking to logs
     }
+    // ✅ C5 FIX: Removed BCrypt.encode("admin123") println — was a debug artifact leaking to logs
 
 }
