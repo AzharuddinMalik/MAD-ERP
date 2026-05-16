@@ -32,9 +32,16 @@ public class JournalApplication {
 
         System.out.println("🚀 main() started - Profile selection phase.");
         
-        // 🚀 Render Fix: Convert postgres://
+        // Diagnostic: List all environment keys (Safely)
+        System.out.println("🔍 Available Environment Keys: " + String.join(", ", System.getenv().keySet()));
+
+        // Check for multiple possible Render/Spring keys
         String dbUrl = System.getenv("DATABASE_URL");
-        System.out.println("ℹ️ DATABASE_URL is " + (dbUrl != null ? "PRESENT" : "MISSING"));
+        if (dbUrl == null) dbUrl = System.getenv("DB_URL");
+        if (dbUrl == null) dbUrl = System.getenv("SPRING_DATASOURCE_URL");
+        if (dbUrl == null) dbUrl = System.getenv("DATABASE_PUBLIC_URL");
+
+        System.out.println("ℹ️ Connection string found: " + (dbUrl != null ? "YES" : "NO"));
         if (dbUrl != null && dbUrl.startsWith("postgres://")) {
             try {
                 // Parse the postgres:// URI
