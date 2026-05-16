@@ -3,7 +3,7 @@
 
 -- 1. ENRICH INVENTORY ITEMS
 ALTER TABLE inventory_items 
-ADD COLUMN current_quantity DOUBLE DEFAULT 0.0,
+ADD COLUMN current_quantity DOUBLE PRECISION DEFAULT 0.0,
 ADD COLUMN project_id BIGINT,
 ADD COLUMN vendor_id BIGINT,
 ADD COLUMN description VARCHAR(255),

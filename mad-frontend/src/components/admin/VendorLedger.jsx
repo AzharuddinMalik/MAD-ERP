@@ -14,12 +14,15 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import financialService from '../../services/financialService';
+import VendorAuditModal from './VendorAuditModal';
 
 const VendorLedger = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [vendors, setVendors] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedVendor, setSelectedVendor] = useState(null);
+    const [showAuditModal, setShowAuditModal] = useState(false);
 
     useEffect(() => {
         fetchVendors();
@@ -34,6 +37,16 @@ const VendorLedger = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleViewStatement = (vendor) => {
+        // Map VendorFinancialDTO fields to the format expected by VendorAuditModal
+        const vendorData = {
+            id: vendor.vendorId,
+            name: vendor.vendorName
+        };
+        setSelectedVendor(vendorData);
+        setShowAuditModal(true);
     };
 
     const filteredVendors = vendors.filter(v => 
@@ -134,13 +147,24 @@ const VendorLedger = () => {
 
                         <button 
                             className="w-full p-4 bg-admin-bg-tertiary border-t border-admin-border text-admin-text font-black text-[10px] uppercase tracking-widest hover:bg-admin-accent hover:text-white transition-all flex items-center justify-center gap-2"
-                            onClick={() => {/* Navigate to vendor details */}}
+                            onClick={() => handleViewStatement(vendor)}
                         >
                             View Statement <ArrowUpRight className="w-3 h-3" />
                         </button>
                     </div>
                 ))}
             </div>
+
+            {/* Audit Modal */}
+            {showAuditModal && selectedVendor && (
+                <VendorAuditModal 
+                    vendor={selectedVendor}
+                    onClose={() => {
+                        setShowAuditModal(false);
+                        fetchVendors(); // Refresh ledger after potential updates
+                    }}
+                />
+            )}
         </div>
     );
 };
