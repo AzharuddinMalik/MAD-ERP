@@ -30,6 +30,9 @@ public class JournalApplication {
             System.out.println("ℹ️ No .env file found in parent directory, skipping manual load.");
         }
 
+        System.out.println("***************************************************");
+        System.out.println("🚀🚀🚀 MAD-ERP STARTING - VERSION 1.0.5 🚀🚀🚀");
+        System.out.println("***************************************************");
         System.out.println("🚀 main() started - Profile selection phase.");
         
         // Diagnostic: List all environment keys (Safely)

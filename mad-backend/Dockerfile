@@ -1,9 +1,9 @@
 # Build Stage
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+FROM maven:3.9.6-eclipse-temurin-17-focal AS build
 WORKDIR /app
-# Force cache invalidation for the code build
-ARG CACHE_BUST=1
-LABEL build_version="1.0.2"
+# HARD CACHE BUST - Version 1.0.5
+ARG CACHE_BUST=4
+LABEL build_version="1.0.5"
 
 COPY pom.xml .
 COPY src ./src

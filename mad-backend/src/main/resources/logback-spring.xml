@@ -62,12 +62,12 @@
 
     <!-- Suppress Hibernate SQL parameter binding (would show passwords in queries) -->
     <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="WARN" additivity="false">
-        <appender-ref ref="FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
     <!-- Suppress Spring Security internals (token details) -->
     <logger name="org.springframework.security" level="WARN" additivity="false">
-        <appender-ref ref="FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
 
     <!-- Suppress Hibernate SQL in production -->
@@ -77,14 +77,14 @@
 
     <!-- Audit logger — dedicated appender -->
     <logger name="net.engineeringdigest.journalApp.security.AuditAuthenticationEntryPoint" level="INFO" additivity="false">
-        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
         <appender-ref ref="CONSOLE"/>
     </logger>
     <logger name="net.engineeringdigest.journalApp.security.AuditLoggingFilter" level="INFO" additivity="false">
-        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
     </logger>
     <logger name="net.engineeringdigest.journalApp.config.RateLimitFilter" level="WARN" additivity="false">
-        <appender-ref ref="AUDIT_FILE"/>
+        <appender-ref ref="CONSOLE"/>
         <appender-ref ref="CONSOLE"/>
     </logger>
 
@@ -99,7 +99,7 @@
          ══════════════════════════════════════════ -->
     <springProfile name="prod">
         <root level="WARN">
-            <appender-ref ref="FILE"/>
+            <appender-ref ref="CONSOLE"/>
         </root>
     </springProfile>
 
