@@ -31,7 +31,7 @@ public class JournalApplication {
         }
 
         System.out.println("***************************************************");
-        System.out.println("🚀🚀🚀 MAD-ERP STARTING - VERSION 1.0.6 🚀🚀🚀");
+        System.out.println("🚀🚀🚀 MAD-ERP STARTING - VERSION 1.0.7 🚀🚀🚀");
         System.out.println("***************************************************");
         System.out.println("🚀 main() started - Profile selection phase.");
         
@@ -45,6 +45,10 @@ public class JournalApplication {
         if (dbUrl == null) dbUrl = System.getenv("DATABASE_PUBLIC_URL");
 
         System.out.println("ℹ️ Connection string found: " + (dbUrl != null ? "YES" : "NO"));
+        if (dbUrl != null) {
+            System.out.println("🔍 Masked URL from environment: " + maskUrl(dbUrl));
+        }
+
         if (dbUrl != null && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))) {
             try {
                 // Normalize protocol for URI parsing if postgresql://
@@ -99,6 +103,10 @@ public class JournalApplication {
 
         SpringApplication.run(JournalApplication.class, args);
     }
-    // ✅ C5 FIX: Removed BCrypt.encode("admin123") println — was a debug artifact leaking to logs
 
+    private static String maskUrl(String url) {
+        if (url == null) return "null";
+        // Masks jdbc:postgresql://user:pass@host:port/db or postgres://user:pass@host:port/db
+        return url.replaceAll("(?<=://[^:]*:)[^@/]+", "******");
+    }
 }
