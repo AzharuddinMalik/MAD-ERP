@@ -1,9 +1,9 @@
 # Build Stage
 FROM maven:3.9.6-eclipse-temurin-17-focal AS build
 WORKDIR /app
-# HARD CACHE BUST - Version 1.0.7
-ARG CACHE_BUST=6
-LABEL build_version="1.0.7"
+# HARD CACHE BUST - Version 1.0.8
+ARG CACHE_BUST=7
+LABEL build_version="1.0.8"
 
 COPY pom.xml .
 COPY src ./src
