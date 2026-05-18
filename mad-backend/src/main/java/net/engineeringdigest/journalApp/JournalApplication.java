@@ -31,7 +31,7 @@ public class JournalApplication {
         }
 
         System.out.println("***************************************************");
-        System.out.println("🚀🚀🚀 MAD-ERP STARTING - VERSION 1.0.5 🚀🚀🚀");
+        System.out.println("🚀🚀🚀 MAD-ERP STARTING - VERSION 1.0.6 🚀🚀🚀");
         System.out.println("***************************************************");
         System.out.println("🚀 main() started - Profile selection phase.");
         
@@ -45,18 +45,36 @@ public class JournalApplication {
         if (dbUrl == null) dbUrl = System.getenv("DATABASE_PUBLIC_URL");
 
         System.out.println("ℹ️ Connection string found: " + (dbUrl != null ? "YES" : "NO"));
-        if (dbUrl != null && dbUrl.startsWith("postgres://")) {
+        if (dbUrl != null && (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://"))) {
             try {
+                // Normalize protocol for URI parsing if postgresql://
+                String uriStr = dbUrl;
+                if (dbUrl.startsWith("postgresql://")) {
+                    uriStr = dbUrl.replace("postgresql://", "postgres://");
+                }
+                
                 // Parse the postgres:// URI
-                java.net.URI dbUri = new java.net.URI(dbUrl);
-                String username = dbUri.getUserInfo().split(":")[0];
-                String password = dbUri.getUserInfo().split(":")[1];
+                java.net.URI dbUri = new java.net.URI(uriStr);
+                String userInfo = dbUri.getUserInfo();
+                String username = "";
+                String password = "";
+                if (userInfo != null && userInfo.contains(":")) {
+                    String[] userParts = userInfo.split(":", 2);
+                    username = userParts[0];
+                    password = userParts[1];
+                }
+                
                 String dbHost = dbUri.getHost();
                 int dbPort = dbUri.getPort();
-                String dbName = dbUri.getPath();
-
+                // Default PostgreSQL port is 5432 if unspecified (-1)
+                if (dbPort <= 0) {
+                    dbPort = 5432;
+                }
+                
+                String dbPath = dbUri.getPath(); // Should be /dbname
+                
                 // Construct JDBC URL: jdbc:postgresql://host:port/dbname?sslmode=require
-                String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + dbName;
+                String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + dbPath;
                 if (!jdbcUrl.contains("?")) {
                     jdbcUrl += "?sslmode=require";
                 } else if (!jdbcUrl.contains("sslmode")) {
@@ -69,11 +87,12 @@ public class JournalApplication {
                 System.setProperty("spring.datasource.password", password);
                 System.setProperty("spring.datasource.driver-class-name", "org.postgresql.Driver");
 
-                System.out.println("✅ Successfully parsed Render DATABASE_URL and configured DataSource.");
+                System.out.println("✅ Parsed Render DATABASE_URL successfully.");
+                System.out.println("🔍 Connection Target -> Host: " + dbHost + ", Port: " + dbPort + ", Path: " + dbPath + ", User: " + username);
             } catch (Exception e) {
                 System.err.println("❌ Failed to parse DATABASE_URL: " + e.getMessage());
                 // Fallback to simple replacement if parsing fails
-                String jdbcUrl = dbUrl.replace("postgres://", "jdbc:postgresql://");
+                String jdbcUrl = dbUrl.replace("postgres://", "jdbc:postgresql://").replace("postgresql://", "jdbc:postgresql://");
                 System.setProperty("spring.datasource.url", jdbcUrl);
             }
         }
